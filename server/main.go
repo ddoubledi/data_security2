@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"container/list"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // User type
@@ -13,9 +16,36 @@ type User struct {
 	name     string
 	password string
 	role     bool
+	blocked  bool
+}
+
+func (u *User) String() string {
+	return u.name + ";" + u.password + ";" + strconv.FormatBool(u.role) + ";" + strconv.FormatBool(u.blocked) + "\n"
 }
 
 var userList = list.New()
+
+func getUsersFromFile(filename string) {
+	dat, err := ioutil.ReadFile(filename)
+	checkError(err)
+	userPass := strings.Split(string(dat), "\n")
+	for i := 0; i < len(userPass)-1; i++ {
+		splitedUserPass := strings.Split(userPass[i], ";")
+		fmt.Println(splitedUserPass)
+		newUser := User{splitedUserPass[0], splitedUserPass[1], false, false}
+		userList.PushBack(&newUser)
+	}
+}
+
+func pushUsersToFile(filename string) {
+	var buffer bytes.Buffer
+	for e := userList.Front(); e != nil; e = e.Next() {
+		userElement := e.Value.(*User)
+		buffer.Write([]byte(userElement.String()))
+	}
+	err := ioutil.WriteFile(filename, []byte(buffer.String()), 0644)
+	checkError(err)
+}
 
 func checkError(err error) {
 	if err != nil {
@@ -43,10 +73,11 @@ func login() *User {
 	fmt.Println("Enter password:")
 	scanner.Scan()
 	password := scanner.Text()
-	return checkUser(login, password)
+	user := checkUser(login, password)
+	return user
 }
 
-func loginChoices(user *User) {
+func loginChoices() *User {
 	scanner := bufio.NewScanner(os.Stdin)
 
 Choices:
@@ -57,9 +88,9 @@ Choices:
 
 		switch choice {
 		case "l":
-			user = login()
+			user := login()
 			if user != nil {
-				return
+				return user
 			} else {
 				continue Choices
 			}
@@ -84,16 +115,17 @@ func register() {
 	scanner.Scan()
 	role, err := strconv.ParseBool(scanner.Text())
 	checkError(err)
-	user := User{login, password, role}
+	user := User{login, password, role, false}
 	userList.PushBack(&user)
 }
 
 func main() {
-	userList.PushBack(&User{"admin", "admin", true})
-
+	userList.PushBack(&User{"admin", "admin", true, false})
+	getUsersFromFile("./user_db.txt")
+	pushUsersToFile("./user_dump.txt")
 	scanner := bufio.NewScanner(os.Stdin)
 	var user *User
-	loginChoices(user)
+	user = loginChoices()
 
 	for {
 		fmt.Println("Hi " + user.name)
