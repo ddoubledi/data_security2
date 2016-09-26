@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -32,7 +33,11 @@ func getUsersFromFile(filename string) {
 	for i := 0; i < len(userPass)-1; i++ {
 		splitedUserPass := strings.Split(userPass[i], ";")
 		fmt.Println(splitedUserPass)
-		newUser := User{splitedUserPass[0], splitedUserPass[1], false, false}
+		role, err := strconv.ParseBool(splitedUserPass[2])
+		checkError(err)
+		blocked, err := strconv.ParseBool(splitedUserPass[3])
+		checkError(err)
+		newUser := User{splitedUserPass[0], splitedUserPass[1], role, blocked}
 		userList.PushBack(&newUser)
 	}
 }
@@ -119,7 +124,7 @@ func register() {
 	userList.PushBack(&user)
 }
 
-func main() {
+func preMain() {
 	userList.PushBack(&User{"admin", "admin", true, false})
 	getUsersFromFile("./user_db.txt")
 	pushUsersToFile("./user_dump.txt")
@@ -137,6 +142,37 @@ func main() {
 				register()
 			}
 		}
+	}
+}
+
+func handleClient(conn net.Conn) {
+	request := make([]byte, 128) // set maximum request length to 128KB to prevent flood based attacks
+	defer conn.Close()           // close connection before exit
+	for {
+		readLen, err := conn.Read(request)
+		if err != nil {
+			fmt.Println(err)
+		}
+		if readLen != 0 {
+			conn.Write([]byte("Boo"))
+		}
+		request = make([]byte, 128)
+	}
+}
+
+func main() {
+	getUsersFromFile("./user_db.txt")
+	service := ":7700"
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
+	checkError(err)
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	checkError(err)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
+		}
+		go handleClient(conn)
 	}
 
 }
