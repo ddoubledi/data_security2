@@ -10,6 +10,9 @@ import (
 	"errors"
 	"encoding/base64"
 	"log"
+	"github.com/joaojeronimo/go-crc16"
+	"math"
+	"net/http"
 )
 
 // Instruction:
@@ -119,4 +122,34 @@ func decrypt(key, text []byte) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func send(message string) {
+	largeKey := getDHKey("7700")
+	key := generateKey(largeKey)
+
+	hash := crc16.Crc16(message)
+	encrypted, err := encrypt(key, message)
+	if err != nil {
+		return err
+	}
+
+	// send(hash, encrypted)
+	println("hash = ", hash, " encrypted = ", encrypted)
+}
+
+func recieve(message string, hash string) string {
+	largeKey := getDHKey("7700")
+	key := generateKey(largeKey)
+
+	decrypted, err := decrypt(key, message)
+	if err != nil {
+		return err
+	}
+
+	currentHash := crc16.Crc16(decrypted)
+	if currentHash == hash {
+		return decrypted
+	}
+	return nil
 }
