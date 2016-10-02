@@ -11,8 +11,6 @@ import (
 	"encoding/base64"
 	"log"
 	"github.com/joaojeronimo/go-crc16"
-	"math"
-	"net/http"
 )
 
 // Instruction:
