@@ -25,7 +25,7 @@ func main() {
 		readLen, err := conn.Read(request)
 		checkError(err)
 		if readLen != 0 {
-			// Pring menu
+			// Print menu
 			fmt.Println(request)
 			scanner.Scan()
 			choice := scanner.Text()
