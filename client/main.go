@@ -32,7 +32,7 @@ func main() {
 
 	var serverSessionKey []byte
 	if readLen != 0 {
-		response, err = decrypt(sessionKey, response)
+		response, err = decrypt([]byte(sessionKey), response)
 		checkError(err)
 
 		serverSessionKey = response
@@ -61,17 +61,17 @@ func workWithMainServer(sessionKey []byte) {
 			fmt.Println(string(response))
 			scanner.Scan()
 			choice := scanner.Text()
-			choice, err = encrypt(sessionKey, choice)
+			encryptedChoice, err := encrypt(sessionKey, []byte(choice))
 			checkError(err)
-			conn.Write([]byte(choice))
+			conn.Write([]byte(encryptedChoice))
 			response = make([]byte, 128)
 		}
 	}
 }
 
-func connectToKeyServer(conn net.Conn) string {
+func connectToKeyServer(conn net.Conn) []byte {
 	conn.Write([]byte("client hello"))
-	var response string // must give "server hello" phrase + server public key, ';' delimiter
+	var response []byte // must give "server hello" phrase + server public key, ';' delimiter
 
 	group, _ := dhkx.GetGroup(0)
 	privateKey, _ := group.GeneratePrivateKey(nil)
@@ -84,10 +84,10 @@ func connectToKeyServer(conn net.Conn) string {
 	if readLen != 0 {
 		// Print response
 		fmt.Println(string(response))
-		responseParts := strings.Split(response, ";")
+		responseParts := strings.Split(string(response), ";")
 
 		if (responseParts[0] == "server hello") {
-			bobPubKey := dhkx.NewPublicKey(responseParts[1])
+			bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
 			k, _ := group.ComputeKey(bobPubKey, privateKey)
 			largeKey = k.Bytes()
 		}
@@ -100,7 +100,7 @@ func connectToKeyServer(conn net.Conn) string {
 	cipheredDone, err := encrypt(sessionKey, doneMessage)
 	checkError(err)
 
-	requestDoneClientMessage := cipheredDone + ";" + publicKey
+	requestDoneClientMessage := append(append(cipheredDone, []byte(";")...), publicKey...)
 
 	conn.Write([]byte(requestDoneClientMessage))
 
@@ -118,7 +118,7 @@ func connectToKeyServer(conn net.Conn) string {
 		}
 	}
 
-	return "wtf happend while connect to server"
+	return []byte("wtf happend while connect to server")
 }
 
 func encrypt(key, text []byte) ([]byte, error) {
