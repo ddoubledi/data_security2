@@ -16,9 +16,8 @@ import (
 )
 
 func main() {
-	service := "7701"
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7701")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	defer conn.Close()
@@ -42,9 +41,7 @@ func main() {
 }
 
 func workWithMainServer(sessionKey []byte) {
-	service := "7700"
-
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7700")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	defer conn.Close()
