@@ -26,15 +26,13 @@ func main() {
 		checkError(err)
 		if readLen != 0 {
 			// Pring menu
-			fmt.Println(request)
+			fmt.Println(string(request))
 			scanner.Scan()
 			choice := scanner.Text()
 			// Send choice to server
 			conn.Write([]byte(choice))
+			request = make([]byte, 128)
 		}
-		_, err = conn.Write([]byte("Buy"))
-		checkError(err)
-		os.Exit(0)
 	}
 }
 
