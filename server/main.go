@@ -67,7 +67,20 @@ func checkUser(login string, password string) *User {
 		}
 	}
 	return nil
+}
 
+func userExist(login string) bool {
+	returnVal := false
+	for e := userList.Front(); e != nil; e = e.Next() {
+		userElement := e.Value.(*User)
+		fmt.Println("login", login)
+		fmt.Println("name", userElement.name)
+		if login == userElement.name {
+			returnVal = true
+			break
+		}
+	}
+	return returnVal
 }
 
 func login() *User {
@@ -145,17 +158,47 @@ func preMain() {
 	}
 }
 
+func getCurrentMenu(currentMenu *string, choice string) string {
+	var returnVal string
+	menuValue := *currentMenu
+	switch menuValue {
+	case "hello":
+		{
+			*currentMenu = "login"
+			returnVal = "Enter your login:"
+			break
+		}
+	case "login":
+		{
+			if userExist(choice) {
+				*currentMenu = "password"
+				returnVal = "Enter your password:"
+			} else {
+				*currentMenu = "hello"
+				returnVal = "Incorect login"
+			}
+			break
+		}
+	case "password":
+		{
+
+		}
+	default:
+		returnVal = "Invalid choice"
+	}
+	return returnVal
+	// return ""
+}
+
 func handleClient(conn net.Conn) {
 	request := make([]byte, 128) // set maximum request length to 128KB to prevent flood based attacks
-	defer conn.Close()           // close connection before exit
+	currentMenu := "hello"
+	defer conn.Close() // close connection before exit
+	conn.Write([]byte(getCurrentMenu(&currentMenu, "")))
 	for {
 		readLen, err := conn.Read(request)
-		if err != nil {
-			fmt.Println(err)
-		}
-		if readLen != 0 {
-			conn.Write([]byte("Boo"))
-		}
+		checkError(err)
+		conn.Write([]byte(getCurrentMenu(&currentMenu, string(request[:readLen]))))
 		request = make([]byte, 128)
 	}
 }
