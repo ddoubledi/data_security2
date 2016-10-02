@@ -10,7 +10,7 @@ import (
 	"errors"
 	"encoding/base64"
 	"log"
-	"github.com/joaojeronimo/go-crc16"
+	//"github.com/joaojeronimo/go-crc16"
 )
 
 // Instruction:
@@ -69,7 +69,7 @@ func getDHKey(destination string) []byte {
 
 	// Send the public key to
 	//Send(port, publicKey)
-	fmt.Println("Public key = ", publicKey)
+	//fmt.Println("Public key = ", publicKey)
 
 	// Receive a slice of bytes from Bob, which contains Bob's public key
 	//b := Recv(port)
@@ -122,32 +122,32 @@ func decrypt(key, text []byte) ([]byte, error) {
 	return data, nil
 }
 
-func send(message string) {
-	largeKey := getDHKey("7700")
-	key := generateKey(largeKey)
-
-	hash := crc16.Crc16(message)
-	encrypted, err := encrypt(key, message)
-	if err != nil {
-		return err
-	}
-
-	// send(hash, encrypted)
-	println("hash = ", hash, " encrypted = ", encrypted)
-}
-
-func recieve(message string, hash string) string {
-	largeKey := getDHKey("7700")
-	key := generateKey(largeKey)
-
-	decrypted, err := decrypt(key, message)
-	if err != nil {
-		return err
-	}
-
-	currentHash := crc16.Crc16(decrypted)
-	if currentHash == hash {
-		return decrypted
-	}
-	return nil
-}
+//func send(message string) {
+//	largeKey := getDHKey("7700")
+//	key := generateKey(largeKey)
+//
+//	hash := crc16.Crc16(message)
+//	encrypted, err := encrypt(key, message)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// send(hash, encrypted)
+//	println("hash = ", hash, " encrypted = ", encrypted)
+//}
+//
+//func recieve(message string, hash string) string {
+//	largeKey := getDHKey("7700")
+//	key := generateKey(largeKey)
+//
+//	decrypted, err := decrypt(key, message)
+//	if err != nil {
+//		return err
+//	}
+//
+//	currentHash := crc16.Crc16(decrypted)
+//	if currentHash == hash {
+//		return decrypted
+//	}
+//	return nil
+//}
