@@ -34,7 +34,7 @@ func checkError(err error) {
 	}
 }
 
-func handleClient(conn net.Conn) {
+func handleClient(conn net.Conn) bool {
 	hello, _ := regexp.Compile("^client hello")
 	done, _ := regexp.Compile("^client done$")
 
@@ -48,27 +48,42 @@ func handleClient(conn net.Conn) {
 
 	for {
 		readLen, err := conn.Read(buf)
+		fmt.Println("I've got this: ", string(buf))
 		if err != nil {
 			fmt.Println(err)
+			break
 		}
 		if readLen != 0 {
 			res := strings.Split(string(buf), ";")
 
 			if hello.MatchString(string(res[0])) {
-				responce := append([]byte(";"), publicKey...)
-				conn.Write([]byte(responce))
-			}
+				response := append([]byte("server hello;"), publicKey...)
+				fmt.Println("My response: ", string(response))
+				conn.Write(response)
+			} else if len(res) > 1 {
+				x := dhkx.NewPublicKey([]byte(res[1]))
+				k, err := group.ComputeKey(x, privateKey)
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
+				sessionKey := generateAESKey(k.Bytes())
+				message, err := decrypt(sessionKey, []byte(res[0]))
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
 
-			k, _ := group.ComputeKey(dhkx.NewPublicKey([]byte(res[1])), privateKey)
-			sessionKey := generateAESKey(k.Bytes())
-			message, _ := decrypt(sessionKey, []byte(res[0]))
-
-			if done.MatchString(string(message)) {
-				conn.Write([]byte("server done"))
+				if done.MatchString(string(message)) {
+					conn.Write([]byte("server done"))
+					conn.Close()
+					break
+				}
 			}
 		}
 		buf = make([]byte, 128)
 	}
+	return false
 }
 
 func encrypt(key, text []byte) ([]byte, error) {

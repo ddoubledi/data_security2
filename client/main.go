@@ -2,21 +2,21 @@ package main
 
 import (
 	"bufio"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"github.com/monnand/dhkx"
+	"io"
 	"net"
 	"os"
-	"github.com/monnand/dhkx"
 	"strings"
-	"crypto/aes"
-	"encoding/base64"
-	"crypto/rand"
-	"io"
-	"crypto/cipher"
-	"errors"
 )
 
 func main() {
-	service := "7701"
+	service := ":7701"
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
 	checkError(err)
@@ -70,55 +70,66 @@ func workWithMainServer(sessionKey []byte) {
 }
 
 func connectToKeyServer(conn net.Conn) []byte {
-	conn.Write([]byte("client hello"))
-	var response []byte // must give "server hello" phrase + server public key, ';' delimiter
-
 	group, _ := dhkx.GetGroup(0)
 	privateKey, _ := group.GeneratePrivateKey(nil)
 	publicKey := privateKey.Bytes()
 
-	readLen, err := conn.Read(response)
-	checkError(err)
+	var sessionKey []byte
 
-	var largeKey []byte;
-	if readLen != 0 {
-		// Print response
-		fmt.Println(string(response))
-		responseParts := strings.Split(string(response), ";")
+	conn.Write([]byte("client hello"))
+	// must give "server hello" phrase + server public key, ';' delimiter
 
-		if (responseParts[0] == "server hello") {
-			bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
-			k, _ := group.ComputeKey(bobPubKey, privateKey)
-			largeKey = k.Bytes()
+	for {
+		var buf []byte
+		readLen, _ := conn.Read(buf)
+		if readLen != 0 {
+			fmt.Println("I've got this: ", string(buf))
+
+			var largeKey []byte
+			// Print response
+			fmt.Println(string(buf))
+			responseParts := strings.Split(string(buf), ";")
+			fmt.Println("Server greeding: ", responseParts[0])
+			if responseParts[0] == "server hello" {
+				bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
+				k, _ := group.ComputeKey(bobPubKey, privateKey)
+				largeKey = k.Bytes()
+			}
+
+			sessionKey = generateKey(largeKey)
+
+			doneMessage := []byte("client done")
+			fmt.Printf("%s\n", doneMessage)
+			cipheredDone, err := encrypt(sessionKey, doneMessage)
+			checkError(err)
+
+			requestDoneClientMessage := append(append(cipheredDone, []byte(";")...), publicKey...)
+
+			conn.Write([]byte(requestDoneClientMessage))
+			break
 		}
 	}
 
-	sessionKey := generateKey(largeKey)
+	for {
+		var buf []byte
+		readLen, err := conn.Read(buf)
+		checkError(err)
+		if readLen != 0 {
+			fmt.Println("I've got this: ", string(buf))
 
-	doneMessage := []byte("client done")
-	fmt.Printf("%s\n", doneMessage)
-	cipheredDone, err := encrypt(sessionKey, doneMessage)
-	checkError(err)
+			decrypted, err := decrypt(sessionKey, buf)
+			checkError(err)
 
-	requestDoneClientMessage := append(append(cipheredDone, []byte(";")...), publicKey...)
+			if readLen != 0 {
+				fmt.Println(string(decrypted))
 
-	conn.Write([]byte(requestDoneClientMessage))
-
-	readLen, err = conn.Read(response)
-	checkError(err)
-	response, err = decrypt(sessionKey, response)
-	checkError(err)
-
-	if readLen != 0 {
-		fmt.Println(string(response))
-
-		if (string(response) == "server done") {
-			// everything is ok and return session key
-			return sessionKey
+				if string(decrypted) == "server done" {
+					// everything is ok and return session key
+					return sessionKey
+				}
+			}
 		}
 	}
-
-	return []byte("wtf happend while connect to server")
 }
 
 func encrypt(key, text []byte) ([]byte, error) {
@@ -127,7 +138,7 @@ func encrypt(key, text []byte) ([]byte, error) {
 		return nil, err
 	}
 	b := base64.StdEncoding.EncodeToString(text)
-	ciphertext := make([]byte, aes.BlockSize + len(b))
+	ciphertext := make([]byte, aes.BlockSize+len(b))
 	iv := ciphertext[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, err
@@ -161,7 +172,7 @@ func generateKey(largeKey []byte) []byte {
 
 	key = largeKey[78:110]
 	for i := range key {
-		key[i] += largeKey[i + 10]
+		key[i] += largeKey[i+10]
 	}
 
 	return key
