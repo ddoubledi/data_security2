@@ -1,90 +1,89 @@
 package main
 
 import (
-	"github.com/monnand/dhkx"
 	"fmt"
+	"net"
+	"os"
+	"strings"
+	"regexp"
+	"github.com/monnand/dhkx"
 	"crypto/aes"
-	"io"
 	"crypto/cipher"
 	"crypto/rand"
 	"errors"
 	"encoding/base64"
-	"log"
-	//"github.com/joaojeronimo/go-crc16"
+	"io"
 )
 
-// Instruction:
-// 1. Use getDHKey on both sides (client and server), this is for safe exchanging common key
-// 2. generateKey, for generating key for AES crypt
-// 3. Save key from generateKey, this is session key for user!
-// 4. Use methods encrypt and decrypt with stored session key for cypher and decipher your messages
-
 func main() {
-	largeKey := getDHKey("7700")
-
-	key := generateKey(largeKey)
-	println("session key = ", key)
-
-	//res := encrypt(key, "droch")
-	//decrypt(key, res)
-
-	//key := []byte("a very very very very secret key") // 32 bytes
-	plaintext := []byte("some really really really long plaintext")
-	fmt.Printf("%s\n", plaintext)
-	ciphertext, err := encrypt(key, plaintext)
-	if err != nil {
-		log.Fatal(err)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7701")
+	checkError(err)
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	checkError(err)
+	for {
+		if conn, err := listener.Accept(); err == nil {
+			go handleClient(conn)
+		}
 	}
-	fmt.Printf("%0x\n", ciphertext)
-	result, err := decrypt(key, ciphertext)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%s\n", result)
 }
 
-func generateKey(largeKey []byte) []byte {
-	key := make([]byte, 32)
-
-	key = largeKey[78:110]
-	for i := range key {
-		key[i] += largeKey[i + 10]
+func checkError(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+		os.Exit(1)
 	}
-
-	return key
 }
 
-// So to make everything works you need run this method at the beginning of communication
-// between client and server for generating session key
-func getDHKey(destination string) []byte {
-	// Get a group. Use the default one would be enough.
+func handleClient(conn net.Conn) bool {
+	hello, _ := regexp.Compile("^client hello")
+	done, _ := regexp.Compile("^client done$")
+
+	buf := make([]byte, 128)
+	defer conn.Close()
+
+	// TODO refactor this
 	group, _ := dhkx.GetGroup(0)
-
-	// Generate a private key from the group.
-	// Use the default random number generator.
 	privateKey, _ := group.GeneratePrivateKey(nil)
-
-	// Get the public key from the private key.
 	publicKey := privateKey.Bytes()
 
-	// Send the public key to
-	//Send(port, publicKey)
-	//fmt.Println("Public key = ", publicKey)
+	for {
+		readLen, err := conn.Read(buf)
+		fmt.Println("I've got this: ", string(buf))
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		if readLen != 0 {
+			res := strings.Split(string(buf), ";")
 
-	// Receive a slice of bytes from Bob, which contains Bob's public key
-	//b := Recv(port)
-	b := publicKey // TODO: delete this bullshit, only for testing!
+			if hello.MatchString(string(res[0])) {
+				response := append([]byte("server hello;"), publicKey...)
+				fmt.Println("My response: ", string(response))
+				conn.Write(response)
+			} else if len(res) > 1 {
+				x := dhkx.NewPublicKey([]byte(res[1]))
+				k, err := group.ComputeKey(x, privateKey)
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
+				sessionKey := generateAESKey(k.Bytes())
+				message, err := decrypt(sessionKey, []byte(res[0]))
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
 
-	// Recover Bob's public key
-	bobPubKey := dhkx.NewPublicKey(b)
-
-	// Compute the key
-	k, _ := group.ComputeKey(bobPubKey, privateKey)
-
-	// Get the key in the form of []byte
-	key := k.Bytes()
-
-	return key
+				if done.MatchString(string(message)) {
+					conn.Write([]byte("server done"))
+					conn.Close()
+					break
+				}
+			}
+		}
+		buf = make([]byte, 128)
+	}
+	return false
 }
 
 func encrypt(key, text []byte) ([]byte, error) {
@@ -122,32 +121,13 @@ func decrypt(key, text []byte) ([]byte, error) {
 	return data, nil
 }
 
-//func send(message string) {
-//	largeKey := getDHKey("7700")
-//	key := generateKey(largeKey)
-//
-//	hash := crc16.Crc16(message)
-//	encrypted, err := encrypt(key, message)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// send(hash, encrypted)
-//	println("hash = ", hash, " encrypted = ", encrypted)
-//}
-//
-//func recieve(message string, hash string) string {
-//	largeKey := getDHKey("7700")
-//	key := generateKey(largeKey)
-//
-//	decrypted, err := decrypt(key, message)
-//	if err != nil {
-//		return err
-//	}
-//
-//	currentHash := crc16.Crc16(decrypted)
-//	if currentHash == hash {
-//		return decrypted
-//	}
-//	return nil
-//}
+func generateAESKey(largeKey []byte) []byte {
+	key := make([]byte, 32)
+
+	key = largeKey[78:110]
+	for i := range key {
+		key[i] += largeKey[i + 10]
+	}
+
+	return key
+}
