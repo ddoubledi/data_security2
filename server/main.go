@@ -246,19 +246,17 @@ func connectToKeyServer(conn net.Conn, login string) []byte {
 	return []byte("wtf")
 }
 
-func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
+func listenKeyServer(serverSessionKey []byte, conn net.Conn, sesionMap chan map[string][]byte) {
 	fmt.Println("Here")
-	var sesionMap map[string][]byte
-	sesionMap = make(map[string][]byte)
+
 	for {
 		message := utils.ReadSecure(conn, serverSessionKey)
 		res := strings.Split(string(message), "\r\n")
-		sesionMap[res[0]] = []byte(res[1])
-		fmt.Println(sesionMap[res[0]])
+		sesionMap[res[0]] <- []byte(res[1])
 	}
 }
 
-func serverConnectToKeyServer() {
+func serverConnectToKeyServer(sesionMap chan map[string][]byte) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
@@ -281,11 +279,12 @@ func serverConnectToKeyServer() {
 		serverSessionKey = response
 	}
 	fmt.Println("Go")
-	go listenKeyServer(serverSessionKey, conn)
+	go listenKeyServer(serverSessionKey, conn, sesionMap)
 }
 
 func main() {
-	serverConnectToKeyServer()
+	var sesionMap chan map[string][]byte
+	serverConnectToKeyServer(sesionMap)
 	getUsersFromFile("./user_db.txt")
 	service := ":7700"
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
