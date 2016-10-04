@@ -31,6 +31,19 @@ func Write(message []byte, conn net.Conn) {
 	conn.Write(AddEnd(message))
 }
 
+// WriteSecure write socket with Encrypt
+func WriteSecure(message []byte, conn net.Conn, key []byte) {
+	encMessage, _ := Encrypt(key, message)
+	Write(encMessage, conn)
+}
+
+// ReadSecure read socket with Decrypt
+func ReadSecure(conn net.Conn, key []byte) []byte {
+	message := Read(conn)
+	encMessage, _ := Decrypt(key, message)
+	return encMessage
+}
+
 // AddEnd ga
 func AddEnd(message []byte) []byte {
 	message = AddDelimiter(message)

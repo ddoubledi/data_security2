@@ -18,9 +18,13 @@ func main() {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	defer conn.Close()
 	checkError(err)
+	// enter login
+	fmt.Println("Enter your login")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	login := scanner.Text()
 	// connect to key server and receive session key
-	fmt.Println("right after connected to socket")
-	sessionKey := connectToKeyServer(conn)
+	sessionKey := connectToKeyServer(conn, login)
 
 	response := make([]byte, 32)
 	readLen, err := conn.Read(response)
@@ -33,7 +37,6 @@ func main() {
 
 		serverSessionKey = response
 	}
-
 	workWithMainServer(serverSessionKey)
 }
 
@@ -63,7 +66,7 @@ func workWithMainServer(sessionKey []byte) {
 	}
 }
 
-func connectToKeyServer(conn net.Conn) []byte {
+func connectToKeyServer(conn net.Conn, login string) []byte {
 	group, _ := dhkx.GetGroup(0)
 	privateKey, _ := group.GeneratePrivateKey(nil)
 	publicKey := privateKey.Bytes()
@@ -71,7 +74,7 @@ func connectToKeyServer(conn net.Conn) []byte {
 	var largeKey []byte
 	var sessionKey []byte
 
-	utils.Write([]byte("client hello"), conn)
+	utils.Write(append([]byte("client "), []byte(login)...), conn)
 
 	buf := utils.Read(conn)
 

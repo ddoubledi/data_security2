@@ -10,6 +10,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/ddoubledi/data_security2/utils"
+	"github.com/monnand/dhkx"
 )
 
 // User type
@@ -203,7 +206,86 @@ func handleClient(conn net.Conn) {
 	}
 }
 
+func connectToKeyServer(conn net.Conn, login string) []byte {
+	group, _ := dhkx.GetGroup(0)
+	privateKey, _ := group.GeneratePrivateKey(nil)
+	publicKey := privateKey.Bytes()
+
+	var largeKey []byte
+	var sessionKey []byte
+
+	utils.Write(append([]byte("client "), []byte(login)...), conn)
+
+	buf := utils.Read(conn)
+
+	res := strings.Split(string(buf), "\r\n")
+	if res[0] == "server hello" {
+		bobPubKey := dhkx.NewPublicKey([]byte(res[1]))
+		k, _ := group.ComputeKey(bobPubKey, privateKey)
+		largeKey = k.Bytes()
+	}
+
+	sessionKey = utils.GenerateAESKey(largeKey)
+
+	doneMessage := []byte("client done")
+	cipheredDone, err := utils.Encrypt(sessionKey, doneMessage)
+	checkError(err)
+
+	utils.Write(append(utils.AddDelimiter(cipheredDone), publicKey...), conn)
+
+	buf = utils.Read(conn)
+
+	res = strings.Split(string(buf), "\r\n")
+	decrypted, _ := utils.Decrypt(sessionKey, []byte(res[0]))
+
+	if string(decrypted) == "server done" {
+		fmt.Println("Succesful received server done message")
+		// everything is ok and return session key
+		return sessionKey
+	}
+	return []byte("wtf")
+}
+
+func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
+	fmt.Println("Here")
+	var sesionMap map[string][]byte
+	sesionMap = make(map[string][]byte)
+	for {
+		message := utils.ReadSecure(conn, serverSessionKey)
+		res := strings.Split(string(message), "\r\n")
+		sesionMap[res[0]] = []byte(res[1])
+		fmt.Println(sesionMap[res[0]])
+	}
+}
+
+func serverConnectToKeyServer() {
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
+	checkError(err)
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	checkError(err)
+	login := "server"
+	// connect to key server and receive session key
+	sessionKey := connectToKeyServer(conn, login)
+
+	response := make([]byte, 32)
+	fmt.Println("response := make([]byte, 32)")
+	readLen, err := conn.Read(response)
+	checkError(err)
+	fmt.Println("readLen, err := conn.Read(response)")
+	var serverSessionKey []byte
+	if readLen != 0 {
+		fmt.Println("readLen != 0")
+		response, err = utils.Decrypt([]byte(sessionKey), response)
+		checkError(err)
+
+		serverSessionKey = response
+	}
+	fmt.Println("Go")
+	go listenKeyServer(serverSessionKey, conn)
+}
+
 func main() {
+	serverConnectToKeyServer()
 	getUsersFromFile("./user_db.txt")
 	service := ":7700"
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
