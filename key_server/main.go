@@ -67,16 +67,12 @@ func handleClient(conn net.Conn) bool {
 		res := strings.Split(string(buf), "\r\n")
 		if hello.MatchString(string(res[0])) {
 			response := append(append([]byte("server hello\r\n"), publicKey...), []byte("\r\nend")...)
-			//fmt.Println("My response: ", string(response))
 			conn.Write(response)
 		} else if len(res) > 2 {
 			x := dhkx.NewPublicKey([]byte(res[1]))
 			k, _ := group.ComputeKey(x, privateKey)
-			//if err != nil {
-			//	fmt.Println(err)
-			//	break
-			//}
-			sessionKey := generateAESKey(k.Bytes())
+
+			sessionKey := generateAESKey(k.Bytes()) // TODO
 			fmt.Println("\n\nSession key: ", sessionKey)
 			message, err := decrypt(sessionKey, []byte(res[0]))
 			if err != nil {
