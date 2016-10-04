@@ -111,15 +111,14 @@ func connectToKeyServer(conn net.Conn) []byte {
 	privateKey, _ := group.GeneratePrivateKey(nil)
 	publicKey := privateKey.Bytes()
 
+	var largeKey []byte
 	var sessionKey []byte
 
 	write([]byte("client hello"), conn)
 
 	buf := read(conn)
 
-	var largeKey []byte
 	res := strings.Split(string(buf), "\r\n")
-
 	if res[0] == "server hello" {
 		bobPubKey := dhkx.NewPublicKey([]byte(res[1]))
 		k, _ := group.ComputeKey(bobPubKey, privateKey)

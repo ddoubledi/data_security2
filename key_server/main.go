@@ -15,6 +15,8 @@ import (
 	"io"
 )
 
+const DELIMITER string = "\r\n"
+
 func main() {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7701")
 	checkError(err)
@@ -30,7 +32,6 @@ func main() {
 func checkError(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		os.Exit(1)
 	}
 }
 
@@ -46,34 +47,17 @@ func handleClient(conn net.Conn) bool {
 	publicKey := privateKey.Bytes()
 
 	for {
-		buf := make([]byte, 0, 4096) // big buffer
-		tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
-		for {
-			n, err := conn.Read(tmp)
-			if err != nil {
-				if err != io.EOF {
-					fmt.Println("read error:", err)
-					break
-				}
-				break
-			}
-			buf = append(buf, tmp[:n]...)
-			tmp = make([]byte, 256)
-			end := buf[len(buf) - 3:]
-			if (string(end) == "end") {
-				break
-			}
-		}
+		buf := read(conn)
 		res := strings.Split(string(buf), "\r\n")
 		if hello.MatchString(string(res[0])) {
-			response := append(append([]byte("server hello\r\n"), publicKey...), []byte("\r\nend")...)
-			conn.Write(response)
+			write(append(addDelimiter([]byte("server hello")), publicKey...), conn)
 		} else if len(res) > 2 {
 			x := dhkx.NewPublicKey([]byte(res[1]))
 			k, _ := group.ComputeKey(x, privateKey)
 
 			sessionKey := generateAESKey(k.Bytes()) // TODO
-			fmt.Println("\n\nSession key: ", sessionKey)
+			fmt.Println("Session key: ", sessionKey)
+
 			message, err := decrypt(sessionKey, []byte(res[0]))
 			if err != nil {
 				fmt.Println(err)
@@ -82,13 +66,14 @@ func handleClient(conn net.Conn) bool {
 
 			if done.MatchString(string(message)) {
 				serverDone := []byte("server done")
+
 				encryptedDoneMessage, err := encrypt(sessionKey, serverDone)
 				if err != nil {
 					fmt.Println(err)
 					break
 				}
-				encryptedDoneMessage = append(encryptedDoneMessage, []byte("\r\nend")...)
-				conn.Write(encryptedDoneMessage)
+
+				write(encryptedDoneMessage, conn)
 				conn.Close()
 				break
 			}
@@ -98,6 +83,7 @@ func handleClient(conn net.Conn) bool {
 	return false
 }
 
+// TODO: вынести это
 func encrypt(key, text []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -114,6 +100,7 @@ func encrypt(key, text []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
+// TODO: вынести это
 func decrypt(key, text []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -133,6 +120,7 @@ func decrypt(key, text []byte) ([]byte, error) {
 	return data, nil
 }
 
+// TODO: вынести это
 func generateAESKey(largeKey []byte) []byte {
 	key := make([]byte, 32)
 
@@ -142,4 +130,42 @@ func generateAESKey(largeKey []byte) []byte {
 	}
 
 	return key
+}
+
+// TODO: вынести это
+func write(message []byte, conn net.Conn) {
+	conn.Write(addEnd(message))
+}
+
+// TODO: вынести это
+func addEnd(message []byte) []byte {
+	message = addDelimiter(message)
+	return append(message, []byte("end")...)
+}
+
+// TODO: вынести это
+func addDelimiter(message []byte) []byte {
+	return append(message, []byte(DELIMITER)...)
+}
+
+// TODO: вынести это
+func read(conn net.Conn) []byte {
+	buf := make([]byte, 0, 4096) // big buffer
+	tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
+	for {
+		n, err := conn.Read(tmp)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("read error:", err)
+			}
+			break
+		}
+		buf = append(buf, tmp[:n]...)
+		tmp = make([]byte, 256)
+		end := buf[len(buf) - 3:]
+		if (string(end) == "end") {
+			break
+		}
+	}
+	return buf
 }
