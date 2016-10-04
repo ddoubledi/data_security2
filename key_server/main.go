@@ -38,7 +38,6 @@ func handleClient(conn net.Conn) bool {
 	hello, _ := regexp.Compile("^client hello")
 	done, _ := regexp.Compile("^client done$")
 
-	buf := make([]byte, 128)
 	defer conn.Close()
 
 	// TODO refactor this
@@ -47,41 +46,60 @@ func handleClient(conn net.Conn) bool {
 	publicKey := privateKey.Bytes()
 
 	for {
-		readLen, err := conn.Read(buf)
-		fmt.Println("I've got this: ", string(buf))
-		if err != nil {
-			fmt.Println(err)
-			break
-		}
-		if readLen != 0 {
-			res := strings.Split(string(buf), ";")
-
-			if hello.MatchString(string(res[0])) {
-				response := append([]byte("server hello;"), publicKey...)
-				fmt.Println("My response: ", string(response))
-				conn.Write(response)
-			} else if len(res) > 1 {
-				x := dhkx.NewPublicKey([]byte(res[1]))
-				k, err := group.ComputeKey(x, privateKey)
-				if err != nil {
-					fmt.Println(err)
+		buf := make([]byte, 0, 4096) // big buffer
+		tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
+		for {
+			n, err := conn.Read(tmp)
+			if err != nil {
+				if err != io.EOF {
+					fmt.Println("read error:", err)
 					break
 				}
-				sessionKey := generateAESKey(k.Bytes())
-				message, err := decrypt(sessionKey, []byte(res[0]))
-				if err != nil {
-					fmt.Println(err)
-					break
-				}
-
-				if done.MatchString(string(message)) {
-					conn.Write([]byte("server done"))
-					conn.Close()
-					break
-				}
+				break
+			}
+			buf = append(buf, tmp[:n]...)
+			tmp = make([]byte, 256)
+			end := buf[len(buf) - 3:]
+			if (string(end) == "end") {
+				break
 			}
 		}
-		buf = make([]byte, 128)
+		res := strings.Split(string(buf), "\r\n")
+		fmt.Println("\n\nLen res: ", len(res))
+		if hello.MatchString(string(res[0])) {
+			response := append(append([]byte("server hello\r\n"), publicKey...), []byte("\r\nend")...)
+			//fmt.Println("My response: ", string(response))
+			fmt.Println("\nServer public raw key: ", []byte(publicKey))
+			conn.Write(response)
+		} else if len(res) > 2 {
+			x := dhkx.NewPublicKey([]byte(res[1]))
+			fmt.Println("Received raw key: ", []byte(res[1]))
+			k, _ := group.ComputeKey(x, privateKey)
+			//if err != nil {
+			//	fmt.Println(err)
+			//	break
+			//}
+			sessionKey := generateAESKey(k.Bytes())
+			fmt.Println("\n\nSession key: ", sessionKey)
+			message, err := decrypt(sessionKey, []byte(res[0]))
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+
+			if done.MatchString(string(message)) {
+				serverDone := []byte("server done\r\nend")
+				encryptedDoneMessage, err := encrypt(sessionKey, serverDone)
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
+				conn.Write(encryptedDoneMessage)
+				conn.Close()
+				break
+			}
+		}
+		buf = make([]byte, 256)
 	}
 	return false
 }

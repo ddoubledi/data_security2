@@ -16,12 +16,13 @@ import (
 )
 
 func main() {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7701")
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	defer conn.Close()
 	checkError(err)
 	// connect to key server and receive session key
+	fmt.Println("right after connected to socket")
 	sessionKey := connectToKeyServer(conn)
 
 	response := make([]byte, 32)
@@ -71,61 +72,85 @@ func connectToKeyServer(conn net.Conn) []byte {
 	publicKey := privateKey.Bytes()
 
 	var sessionKey []byte
+	conn.Write([]byte("client hello\r\nend"))
 
-	conn.Write([]byte("client hello"))
-	// must give "server hello" phrase + server public key, ';' delimiter
-
+	buf := make([]byte, 0, 4096) // big buffer
+	tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
 	for {
-		var buf []byte
-		readLen, _ := conn.Read(buf)
-		if readLen != 0 {
-			fmt.Println("I've got this: ", string(buf))
-
-			var largeKey []byte
-			// Print response
-			fmt.Println(string(buf))
-			responseParts := strings.Split(string(buf), ";")
-			fmt.Println("Server greeding: ", responseParts[0])
-			if responseParts[0] == "server hello" {
-				bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
-				k, _ := group.ComputeKey(bobPubKey, privateKey)
-				largeKey = k.Bytes()
+		n, err := conn.Read(tmp)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("read error:", err)
 			}
-
-			sessionKey = generateKey(largeKey)
-
-			doneMessage := []byte("client done")
-			fmt.Printf("%s\n", doneMessage)
-			cipheredDone, err := encrypt(sessionKey, doneMessage)
-			checkError(err)
-
-			requestDoneClientMessage := append(append(cipheredDone, []byte(";")...), publicKey...)
-
-			conn.Write([]byte(requestDoneClientMessage))
+			break
+		}
+		//fmt.Println("got", n, "bytes.")
+		buf = append(buf, tmp[:n]...)
+		tmp = make([]byte, 256)
+		end := buf[len(buf) - 3:]
+		if (string(end) == "end") {
 			break
 		}
 	}
+	fmt.Println("I've got (server hello;key;end): ", string(buf))
 
+	var largeKey []byte
+	// Print response
+	responseParts := strings.Split(string(buf), "\r\n")
+	fmt.Println("Server greeding: ", responseParts[0])
+
+	if responseParts[0] == "server hello" {
+		fmt.Println("\nServer raw key: ", []byte(responseParts[1]))
+		bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
+		k, _ := group.ComputeKey(bobPubKey, privateKey)
+		largeKey = k.Bytes()
+	}
+
+	sessionKey = generateKey(largeKey)
+
+	doneMessage := []byte("client done")
+	fmt.Println("\n\nSession key in decrypt: ", sessionKey)
+	cipheredDone, err := encrypt(sessionKey, doneMessage)
+	checkError(err)
+	fmt.Println("\n\nSended raw key: ", publicKey)
+
+	requestDoneClientMessage := append(append(append(cipheredDone, []byte("\r\n")...), publicKey...), []byte("\r\nend")...)
+	fmt.Println("\n\n\nbefore writing client done\n\n\n")
+	fmt.Println("Request done clien message: ", string(requestDoneClientMessage))
+	conn.Write([]byte(requestDoneClientMessage))
+
+	buf = make([]byte, 0, 4096) // big buffer
+	tmp = make([]byte, 256)     // using small tmo buffer for demonstrating
 	for {
-		var buf []byte
-		readLen, err := conn.Read(buf)
-		checkError(err)
-		if readLen != 0 {
-			fmt.Println("I've got this: ", string(buf))
-
-			decrypted, err := decrypt(sessionKey, buf)
-			checkError(err)
-
-			if readLen != 0 {
-				fmt.Println(string(decrypted))
-
-				if string(decrypted) == "server done" {
-					// everything is ok and return session key
-					return sessionKey
-				}
+		n, err := conn.Read(tmp)
+		if err != nil {
+			fmt.Println("here", err)
+			if err != io.EOF {
+				fmt.Println("read error:", err)
 			}
+			break
+		}
+		buf = append(buf, tmp[:n]...)
+		tmp = make([]byte, 256)
+		end := buf[len(buf) - 3:]
+		if (string(end) == "end") {
+			break
 		}
 	}
+	fmt.Println("I've got this (server done decrypted)")//, string(buf))
+
+	fmt.Println("Session key in decrypt: ", sessionKey)
+	decrypted, err := decrypt(sessionKey, buf)
+	checkError(err)
+
+	fmt.Println(string(decrypted))
+
+	if string(decrypted) == "server done" {
+		fmt.Println("Succesful received server done message")
+		// everything is ok and return session key
+		return sessionKey
+	}
+	return []byte("wtf")
 }
 
 func encrypt(key, text []byte) ([]byte, error) {
@@ -134,7 +159,7 @@ func encrypt(key, text []byte) ([]byte, error) {
 		return nil, err
 	}
 	b := base64.StdEncoding.EncodeToString(text)
-	ciphertext := make([]byte, aes.BlockSize+len(b))
+	ciphertext := make([]byte, aes.BlockSize + len(b))
 	iv := ciphertext[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, err
@@ -168,7 +193,7 @@ func generateKey(largeKey []byte) []byte {
 
 	key = largeKey[78:110]
 	for i := range key {
-		key[i] += largeKey[i+10]
+		key[i] += largeKey[i + 10]
 	}
 
 	return key
