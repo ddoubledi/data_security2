@@ -81,7 +81,7 @@ func Encrypt(key, text []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Decrypt lolo
+// Decrypt lolo`
 func Decrypt(key, text []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
