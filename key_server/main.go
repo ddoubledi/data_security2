@@ -65,15 +65,12 @@ func handleClient(conn net.Conn) bool {
 			}
 		}
 		res := strings.Split(string(buf), "\r\n")
-		fmt.Println("\n\nLen res: ", len(res))
 		if hello.MatchString(string(res[0])) {
 			response := append(append([]byte("server hello\r\n"), publicKey...), []byte("\r\nend")...)
 			//fmt.Println("My response: ", string(response))
-			fmt.Println("\nServer public raw key: ", []byte(publicKey))
 			conn.Write(response)
 		} else if len(res) > 2 {
 			x := dhkx.NewPublicKey([]byte(res[1]))
-			fmt.Println("Received raw key: ", []byte(res[1]))
 			k, _ := group.ComputeKey(x, privateKey)
 			//if err != nil {
 			//	fmt.Println(err)
@@ -88,12 +85,13 @@ func handleClient(conn net.Conn) bool {
 			}
 
 			if done.MatchString(string(message)) {
-				serverDone := []byte("server done\r\nend")
+				serverDone := []byte("server done")
 				encryptedDoneMessage, err := encrypt(sessionKey, serverDone)
 				if err != nil {
 					fmt.Println(err)
 					break
 				}
+				encryptedDoneMessage = append(encryptedDoneMessage, []byte("\r\nend")...)
 				conn.Write(encryptedDoneMessage)
 				conn.Close()
 				break

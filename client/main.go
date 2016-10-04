@@ -84,7 +84,6 @@ func connectToKeyServer(conn net.Conn) []byte {
 			}
 			break
 		}
-		//fmt.Println("got", n, "bytes.")
 		buf = append(buf, tmp[:n]...)
 		tmp = make([]byte, 256)
 		end := buf[len(buf) - 3:]
@@ -92,15 +91,12 @@ func connectToKeyServer(conn net.Conn) []byte {
 			break
 		}
 	}
-	fmt.Println("I've got (server hello;key;end): ", string(buf))
 
 	var largeKey []byte
 	// Print response
 	responseParts := strings.Split(string(buf), "\r\n")
-	fmt.Println("Server greeding: ", responseParts[0])
 
 	if responseParts[0] == "server hello" {
-		fmt.Println("\nServer raw key: ", []byte(responseParts[1]))
 		bobPubKey := dhkx.NewPublicKey([]byte(responseParts[1]))
 		k, _ := group.ComputeKey(bobPubKey, privateKey)
 		largeKey = k.Bytes()
@@ -109,14 +105,10 @@ func connectToKeyServer(conn net.Conn) []byte {
 	sessionKey = generateKey(largeKey)
 
 	doneMessage := []byte("client done")
-	fmt.Println("\n\nSession key in decrypt: ", sessionKey)
 	cipheredDone, err := encrypt(sessionKey, doneMessage)
 	checkError(err)
-	fmt.Println("\n\nSended raw key: ", publicKey)
 
 	requestDoneClientMessage := append(append(append(cipheredDone, []byte("\r\n")...), publicKey...), []byte("\r\nend")...)
-	fmt.Println("\n\n\nbefore writing client done\n\n\n")
-	fmt.Println("Request done clien message: ", string(requestDoneClientMessage))
 	conn.Write([]byte(requestDoneClientMessage))
 
 	buf = make([]byte, 0, 4096) // big buffer
@@ -124,7 +116,6 @@ func connectToKeyServer(conn net.Conn) []byte {
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
-			fmt.Println("here", err)
 			if err != io.EOF {
 				fmt.Println("read error:", err)
 			}
@@ -137,13 +128,9 @@ func connectToKeyServer(conn net.Conn) []byte {
 			break
 		}
 	}
-	fmt.Println("I've got this (server done decrypted)")//, string(buf))
 
-	fmt.Println("Session key in decrypt: ", sessionKey)
-	decrypted, err := decrypt(sessionKey, buf)
-	checkError(err)
-
-	fmt.Println(string(decrypted))
+	responseParts = strings.Split(string(buf), "\r\n")
+	decrypted, _ := decrypt(sessionKey, []byte(responseParts[0]))
 
 	if string(decrypted) == "server done" {
 		fmt.Println("Succesful received server done message")
