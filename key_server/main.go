@@ -71,6 +71,7 @@ func genSecure(conn net.Conn) (string, []byte) {
 				}
 
 				utils.Write(encryptedDoneMessage, conn)
+				fmt.Println("end here")
 				break
 			}
 		}
@@ -80,21 +81,21 @@ func genSecure(conn net.Conn) (string, []byte) {
 }
 
 // return *net.TCPListener
-func handleServer(listener *net.TCPListener) (*net.Conn, []byte) {
+func handleServer(listener *net.TCPListener) (net.Conn, []byte) {
 	fmt.Println("Connect to server")
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			_, key := genSecure(conn)
 			// send to server about new client
-			return &conn, key
+			return conn, key
 		}
 	}
 }
 
-func handleClient(conn net.Conn, connServer *net.Conn, key []byte) bool {
+func handleClient(conn net.Conn, connServer net.Conn, key []byte) bool {
 	login, sessionKey := genSecure(conn)
 	// send to server about new client
-	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), *connServer, key)
+	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
 	conn.Close()
 	return false
 }

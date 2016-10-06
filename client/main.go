@@ -37,33 +37,33 @@ func main() {
 
 		serverSessionKey = response
 	}
-	workWithMainServer(serverSessionKey)
+	fmt.Println("sessionKey:", serverSessionKey)
+	workWithMainServer(serverSessionKey, login)
 }
 
-func workWithMainServer(sessionKey []byte) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7700")
+func workWithMainServer(sessionKey []byte, login string) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7700")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	defer conn.Close()
+	// defer conn.Close()
 	checkError(err)
-
-	response := make([]byte, 128)
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		readLen, err := conn.Read(response)
-		checkError(err)
-		response, err = utils.Decrypt(sessionKey, response)
-		checkError(err)
-		if readLen != 0 {
-			fmt.Println(string(response))
-			scanner.Scan()
-			choice := scanner.Text()
-			encryptedChoice, err := utils.Encrypt(sessionKey, []byte(choice))
-			checkError(err)
-			conn.Write([]byte(encryptedChoice))
-			response = make([]byte, 128)
-		}
-	}
+	conn.Write([]byte(login))
+	// response := make([]byte, 128)
+	// for {
+	// 	readLen, err := conn.Read(response)
+	// 	checkError(err)
+	// 	response, err = utils.Decrypt(sessionKey, response)
+	// 	checkError(err)
+	// 	if readLen != 0 {
+	// 		fmt.Println(string(response))
+	// 		scanner.Scan()
+	// 		choice := scanner.Text()
+	// 		encryptedChoice, err := utils.Encrypt(sessionKey, []byte(choice))
+	// 		checkError(err)
+	// 		conn.Write([]byte(encryptedChoice))
+	// 		response = make([]byte, 128)
+	// 	}
+	// }
 }
 
 func connectToKeyServer(conn net.Conn, login string) []byte {

@@ -193,17 +193,21 @@ func getCurrentMenu(currentMenu *string, choice string) string {
 	// return ""
 }
 
-func handleClient(conn net.Conn) {
-	request := make([]byte, 128) // set maximum request length to 128KB to prevent flood based attacks
-	currentMenu := "hello"
-	defer conn.Close() // close connection before exit
-	conn.Write([]byte(getCurrentMenu(&currentMenu, "")))
-	for {
-		readLen, err := conn.Read(request)
-		checkError(err)
-		conn.Write([]byte(getCurrentMenu(&currentMenu, string(request[:readLen]))))
-		request = make([]byte, 128)
-	}
+func handleClient(conn net.Conn, userMap map[string]string) {
+	// request := make([]byte, 128) // set maximum request length to 128KB to prevent flood based attacks
+	// currentMenu := "hello"
+	// defer conn.Close() // close connection before exit
+	// conn.Write([]byte(getCurrentMenu(&currentMenu, "")))
+	// for {
+	// 	readLen, err := conn.Read(request)
+	// 	checkError(err)
+	// 	conn.Write([]byte(getCurrentMenu(&currentMenu, string(request[:readLen]))))
+	// 	request = make([]byte, 128)
+	// }
+	// Need new code Here
+	login := utils.Read(conn)
+	fmt.Println("Login:", login)
+	fmt.Println("sessionKey:", userMap[string(login)])
 }
 
 func connectToKeyServer(conn net.Conn, login string) []byte {
@@ -246,17 +250,19 @@ func connectToKeyServer(conn net.Conn, login string) []byte {
 	return []byte("wtf")
 }
 
-func listenKeyServer(serverSessionKey []byte, conn net.Conn, sesionMap chan map[string][]byte) {
+func listenKeyServer(serverSessionKey []byte, conn net.Conn, usersMap map[string]string) {
 	fmt.Println("Here")
 
 	for {
 		message := utils.ReadSecure(conn, serverSessionKey)
 		res := strings.Split(string(message), "\r\n")
-		sesionMap[res[0]] <- []byte(res[1])
+		fmt.Println(res)
+		usersMap[res[0]] = res[1]
+		fmt.Println(usersMap[res[0]])
 	}
 }
 
-func serverConnectToKeyServer(sesionMap chan map[string][]byte) {
+func serverConnectToKeyServer(usersMap map[string]string) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
@@ -279,12 +285,14 @@ func serverConnectToKeyServer(sesionMap chan map[string][]byte) {
 		serverSessionKey = response
 	}
 	fmt.Println("Go")
-	go listenKeyServer(serverSessionKey, conn, sesionMap)
+	go listenKeyServer(serverSessionKey, conn, usersMap)
 }
 
 func main() {
-	var sesionMap chan map[string][]byte
-	serverConnectToKeyServer(sesionMap)
+	// map, that store map[login] = sessionKey
+	var usersMap map[string]string
+	usersMap = make(map[string]string)
+	serverConnectToKeyServer(usersMap)
 	getUsersFromFile("./user_db.txt")
 	service := ":7700"
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
@@ -296,7 +304,7 @@ func main() {
 		if err != nil {
 			continue
 		}
-		go handleClient(conn)
+		go handleClient(conn, usersMap)
 	}
 
 }

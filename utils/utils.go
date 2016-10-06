@@ -35,6 +35,7 @@ func Write(message []byte, conn net.Conn) {
 func WriteSecure(message []byte, conn net.Conn, key []byte) {
 	encMessage, _ := Encrypt(key, message)
 	Write(encMessage, conn)
+	fmt.Println("sended")
 }
 
 // ReadSecure read socket with Decrypt
