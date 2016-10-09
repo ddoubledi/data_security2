@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
-	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/ddoubledi/data_security2/utils"
 	"github.com/monnand/dhkx"
@@ -13,28 +14,38 @@ import (
 
 func main() {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":7701")
-	checkError(err)
+	utils.CheckError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
-	checkError(err)
-	connServer, key := handleServer(listener)
+	utils.CheckError(err)
+	// connServer, key := handleServer(listener)
+	// for {
+	// 	if conn, err := listener.Accept(); err == nil {
+	// 		go handleClient(conn, connServer, key)
+	// 	}
+	// }
 	for {
 		if conn, err := listener.Accept(); err == nil {
-			go handleClient(conn, connServer, key)
+			go handleClient(conn, []byte("s"))
 		}
 	}
 }
 
-func checkError(err error) {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+func GenerateRandomBytes(n int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
+	return string(b)
 }
 
 func genSecure(conn net.Conn) (string, []byte) {
 	hello, _ := regexp.Compile("^client .*")
-	done, _ := regexp.Compile("^client done$")
+	done, _ := regexp.Compile("^client good$")
 	var login string
 	var sessionKey []byte
+	// var serverSessionKey []byte
 
 	// TODO refactor this
 	group, _ := dhkx.GetGroup(0)
@@ -62,17 +73,29 @@ func genSecure(conn net.Conn) (string, []byte) {
 			}
 
 			if done.MatchString(string(message)) {
-				serverDone := []byte("server done")
+				utils.WriteSecure([]byte("server good"), conn, sessionKey)
 
-				encryptedDoneMessage, err := utils.Encrypt(sessionKey, serverDone)
-				if err != nil {
-					fmt.Println(err)
-					break
-				}
-
-				utils.Write(encryptedDoneMessage, conn)
-				fmt.Println("end here")
-				break
+				// generate random key for client and server
+				genString := GenerateRandomBytes(32)
+				utils.WriteSecure([]byte(genString), conn, sessionKey)
+				// encryptedMessage, err := utils.Encrypt(sessionKey, []byte(genString))
+				// utils.CheckError(err)
+				// utils.Write(encryptedMessage, conn)
+				fmt.Println("genString:", genString)
+				// fmt.Println("encryptedMessage:", encryptedMessage)
+				// fmt.Println("serverSessionKey:", serverSessionKey)
+				//
+				// serverDone := []byte("server good")
+				// fmt.Println("send fucking server good with key")
+				// fmt.Println(string(append(utils.AddDelimiter(serverDone), serverSessionKey...)))
+				// utils.WriteSecure(serverSessionKey, conn, sessionKey)
+				//
+				// endMessage := utils.ReadSecure(conn, sessionKey)
+				// res = strings.Split(string(endMessage), "\r\n")
+				// if res[0] == "client done" {
+				// 	fmt.Println("end here")
+				// 	break
+				// }
 			}
 		}
 		buf = make([]byte, 256)
@@ -92,10 +115,17 @@ func handleServer(listener *net.TCPListener) (net.Conn, []byte) {
 	}
 }
 
-func handleClient(conn net.Conn, connServer net.Conn, key []byte) bool {
-	login, sessionKey := genSecure(conn)
+// func handleClient(conn net.Conn, connServer net.Conn, key []byte) bool {
+// 	login, sessionKey := genSecure(conn)
+// 	// send to server about new client
+// 	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
+// 	conn.Close()
+// 	return false
+// }
+func handleClient(conn net.Conn, key []byte) bool {
+	genSecure(conn)
 	// send to server about new client
-	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
+	// utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
 	conn.Close()
 	return false
 }

@@ -9,6 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"strings"
+
+	"github.com/monnand/dhkx"
 )
 
 // DELIMITER best
@@ -31,17 +35,20 @@ func Write(message []byte, conn net.Conn) {
 	conn.Write(AddEnd(message))
 }
 
-// WriteSecure write socket with Encrypt
+// WriteSecure encrypt message and send it.
 func WriteSecure(message []byte, conn net.Conn, key []byte) {
-	encMessage, _ := Encrypt(key, message)
+	encMessage, err := Encrypt(key, message)
+	CheckError(err)
 	Write(encMessage, conn)
-	fmt.Println("sended")
 }
 
-// ReadSecure read socket with Decrypt
+// ReadSecure encrypted message must be on the first position of split - [encMessage\r\nend]
+// Than we can split it as usual string.
 func ReadSecure(conn net.Conn, key []byte) []byte {
 	message := Read(conn)
-	encMessage, _ := Decrypt(key, message)
+	res := strings.Split(string(message), "\r\n")
+	encMessage, err := Decrypt(key, []byte(res[0]))
+	CheckError(err)
 	return encMessage
 }
 
@@ -70,8 +77,8 @@ func Read(conn net.Conn) []byte {
 		}
 		buf = append(buf, tmp[:n]...)
 		tmp = make([]byte, 256)
-		end := buf[len(buf)-3:]
-		if string(end) == "end" {
+		end := buf[len(buf)-5:]
+		if string(end) == "\r\nend" {
 			break
 		}
 	}
@@ -113,4 +120,58 @@ func Decrypt(key, text []byte) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func ConnectToKeyServer(login string) ([]byte, net.Conn) {
+	// connect to key server and scan login
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
+	CheckError(err)
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	defer conn.Close()
+	CheckError(err)
+
+	//receive session key
+	group, _ := dhkx.GetGroup(0)
+	privateKey, _ := group.GeneratePrivateKey(nil)
+	publicKey := privateKey.Bytes()
+
+	var largeKey []byte
+	var sessionKey []byte
+	var serverSessionKey []byte
+	serverSessionKey = make([]byte, 32)
+	// write handshake phrase "client {{login}}"
+	Write(append([]byte("client "), []byte(login)...), conn)
+
+	buf := Read(conn)
+
+	res := strings.Split(string(buf), "\r\n")
+	if res[0] == "server hello" {
+		bobPubKey := dhkx.NewPublicKey([]byte(res[1]))
+		k, _ := group.ComputeKey(bobPubKey, privateKey)
+		largeKey = k.Bytes()
+	}
+
+	sessionKey = GenerateAESKey(largeKey)
+
+	doneMessage := []byte("client good")
+
+	cipheredDone, err := Encrypt(sessionKey, doneMessage)
+	CheckError(err)
+
+	Write(append(AddDelimiter(cipheredDone), publicKey...), conn)
+
+	result := ReadSecure(conn, sessionKey)
+	if string(result) == "server good" {
+		result := ReadSecure(conn, sessionKey)
+		serverSessionKey = []byte(result)
+		WriteSecure([]byte("client done"), conn, sessionKey)
+		return serverSessionKey, conn
+	}
+	return []byte("wtf"), conn
+}
+
+func CheckError(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+	}
 }

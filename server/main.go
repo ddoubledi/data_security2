@@ -31,15 +31,15 @@ var userList = list.New()
 
 func getUsersFromFile(filename string) {
 	dat, err := ioutil.ReadFile(filename)
-	checkError(err)
+	utils.CheckError(err)
 	userPass := strings.Split(string(dat), "\n")
 	for i := 0; i < len(userPass)-1; i++ {
 		splitedUserPass := strings.Split(userPass[i], ";")
 		fmt.Println(splitedUserPass)
 		role, err := strconv.ParseBool(splitedUserPass[2])
-		checkError(err)
+		utils.CheckError(err)
 		blocked, err := strconv.ParseBool(splitedUserPass[3])
-		checkError(err)
+		utils.CheckError(err)
 		newUser := User{splitedUserPass[0], splitedUserPass[1], role, blocked}
 		userList.PushBack(&newUser)
 	}
@@ -52,14 +52,7 @@ func pushUsersToFile(filename string) {
 		buffer.Write([]byte(userElement.String()))
 	}
 	err := ioutil.WriteFile(filename, []byte(buffer.String()), 0644)
-	checkError(err)
-}
-
-func checkError(err error) {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		os.Exit(1)
-	}
+	utils.CheckError(err)
 }
 
 func checkUser(login string, password string) *User {
@@ -135,7 +128,7 @@ func register() {
 	fmt.Println("Enter role:")
 	scanner.Scan()
 	role, err := strconv.ParseBool(scanner.Text())
-	checkError(err)
+	utils.CheckError(err)
 	user := User{login, password, role, false}
 	userList.PushBack(&user)
 }
@@ -200,7 +193,7 @@ func handleClient(conn net.Conn, userMap map[string]string) {
 	// conn.Write([]byte(getCurrentMenu(&currentMenu, "")))
 	// for {
 	// 	readLen, err := conn.Read(request)
-	// 	checkError(err)
+	// 	utils.CheckError(err)
 	// 	conn.Write([]byte(getCurrentMenu(&currentMenu, string(request[:readLen]))))
 	// 	request = make([]byte, 128)
 	// }
@@ -233,7 +226,7 @@ func connectToKeyServer(conn net.Conn, login string) []byte {
 
 	doneMessage := []byte("client done")
 	cipheredDone, err := utils.Encrypt(sessionKey, doneMessage)
-	checkError(err)
+	utils.CheckError(err)
 
 	utils.Write(append(utils.AddDelimiter(cipheredDone), publicKey...), conn)
 
@@ -250,61 +243,25 @@ func connectToKeyServer(conn net.Conn, login string) []byte {
 	return []byte("wtf")
 }
 
-func listenKeyServer(serverSessionKey []byte, conn net.Conn, usersMap map[string]string) {
-	fmt.Println("Here")
+func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
 
-	for {
-		message := utils.ReadSecure(conn, serverSessionKey)
-		res := strings.Split(string(message), "\r\n")
-		fmt.Println(res)
-		usersMap[res[0]] = res[1]
-		fmt.Println(usersMap[res[0]])
-	}
-}
-
-func serverConnectToKeyServer(usersMap map[string]string) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
-	checkError(err)
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	checkError(err)
-	login := "server"
-	// connect to key server and receive session key
-	sessionKey := connectToKeyServer(conn, login)
-
-	response := make([]byte, 32)
-	fmt.Println("response := make([]byte, 32)")
-	readLen, err := conn.Read(response)
-	checkError(err)
-	fmt.Println("readLen, err := conn.Read(response)")
-	var serverSessionKey []byte
-	if readLen != 0 {
-		fmt.Println("readLen != 0")
-		response, err = utils.Decrypt([]byte(sessionKey), response)
-		checkError(err)
-
-		serverSessionKey = response
-	}
-	fmt.Println("Go")
-	go listenKeyServer(serverSessionKey, conn, usersMap)
 }
 
 func main() {
 	// map, that store map[login] = sessionKey
-	var usersMap map[string]string
-	usersMap = make(map[string]string)
-	serverConnectToKeyServer(usersMap)
 	getUsersFromFile("./user_db.txt")
 	service := ":7700"
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
-	checkError(err)
+	utils.CheckError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
-	checkError(err)
+	utils.CheckError(err)
+	sessionKey, conn := utils.ConnectToKeyServer("server")
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
 		}
-		go handleClient(conn, usersMap)
+		go handleClient(conn)
 	}
 
 }
