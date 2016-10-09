@@ -17,19 +17,16 @@ func main() {
 	utils.CheckError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	utils.CheckError(err)
-	// connServer, key := handleServer(listener)
-	// for {
-	// 	if conn, err := listener.Accept(); err == nil {
-	// 		go handleClient(conn, connServer, key)
-	// 	}
-	// }
+	connServer, serverKey := handleServer(listener)
 	for {
 		if conn, err := listener.Accept(); err == nil {
-			go handleClient(conn, []byte("s"))
+			go handleClient(conn, connServer, serverKey)
 		}
 	}
+
 }
 
+// GenerateRandomBytes gen random string with len(n)
 func GenerateRandomBytes(n int) string {
 	rand.Seed(time.Now().UnixNano())
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -78,24 +75,8 @@ func genSecure(conn net.Conn) (string, []byte) {
 				// generate random key for client and server
 				genString := GenerateRandomBytes(32)
 				utils.WriteSecure([]byte(genString), conn, sessionKey)
-				// encryptedMessage, err := utils.Encrypt(sessionKey, []byte(genString))
-				// utils.CheckError(err)
-				// utils.Write(encryptedMessage, conn)
-				fmt.Println("genString:", genString)
-				// fmt.Println("encryptedMessage:", encryptedMessage)
-				// fmt.Println("serverSessionKey:", serverSessionKey)
-				//
-				// serverDone := []byte("server good")
-				// fmt.Println("send fucking server good with key")
-				// fmt.Println(string(append(utils.AddDelimiter(serverDone), serverSessionKey...)))
-				// utils.WriteSecure(serverSessionKey, conn, sessionKey)
-				//
-				// endMessage := utils.ReadSecure(conn, sessionKey)
-				// res = strings.Split(string(endMessage), "\r\n")
-				// if res[0] == "client done" {
-				// 	fmt.Println("end here")
-				// 	break
-				// }
+				fmt.Println("serverSessionKey:", genString)
+				// TODO: Client done?
 			}
 		}
 		buf = make([]byte, 256)
@@ -115,17 +96,10 @@ func handleServer(listener *net.TCPListener) (net.Conn, []byte) {
 	}
 }
 
-// func handleClient(conn net.Conn, connServer net.Conn, key []byte) bool {
-// 	login, sessionKey := genSecure(conn)
-// 	// send to server about new client
-// 	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
-// 	conn.Close()
-// 	return false
-// }
-func handleClient(conn net.Conn, key []byte) bool {
-	genSecure(conn)
+func handleClient(conn net.Conn, connServer net.Conn, key []byte) bool {
+	login, sessionKey := genSecure(conn)
 	// send to server about new client
-	// utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
+	utils.WriteSecure(append(utils.AddDelimiter([]byte(login)), sessionKey...), connServer, key)
 	conn.Close()
 	return false
 }

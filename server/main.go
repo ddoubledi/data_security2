@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/ddoubledi/data_security2/utils"
-	"github.com/monnand/dhkx"
 )
 
 // User type
@@ -186,61 +185,9 @@ func getCurrentMenu(currentMenu *string, choice string) string {
 	// return ""
 }
 
-func handleClient(conn net.Conn, userMap map[string]string) {
-	// request := make([]byte, 128) // set maximum request length to 128KB to prevent flood based attacks
-	// currentMenu := "hello"
-	// defer conn.Close() // close connection before exit
-	// conn.Write([]byte(getCurrentMenu(&currentMenu, "")))
-	// for {
-	// 	readLen, err := conn.Read(request)
-	// 	utils.CheckError(err)
-	// 	conn.Write([]byte(getCurrentMenu(&currentMenu, string(request[:readLen]))))
-	// 	request = make([]byte, 128)
-	// }
-	// Need new code Here
+func handleClient(conn net.Conn) {
 	login := utils.Read(conn)
 	fmt.Println("Login:", login)
-	fmt.Println("sessionKey:", userMap[string(login)])
-}
-
-func connectToKeyServer(conn net.Conn, login string) []byte {
-	group, _ := dhkx.GetGroup(0)
-	privateKey, _ := group.GeneratePrivateKey(nil)
-	publicKey := privateKey.Bytes()
-
-	var largeKey []byte
-	var sessionKey []byte
-
-	utils.Write(append([]byte("client "), []byte(login)...), conn)
-
-	buf := utils.Read(conn)
-
-	res := strings.Split(string(buf), "\r\n")
-	if res[0] == "server hello" {
-		bobPubKey := dhkx.NewPublicKey([]byte(res[1]))
-		k, _ := group.ComputeKey(bobPubKey, privateKey)
-		largeKey = k.Bytes()
-	}
-
-	sessionKey = utils.GenerateAESKey(largeKey)
-
-	doneMessage := []byte("client done")
-	cipheredDone, err := utils.Encrypt(sessionKey, doneMessage)
-	utils.CheckError(err)
-
-	utils.Write(append(utils.AddDelimiter(cipheredDone), publicKey...), conn)
-
-	buf = utils.Read(conn)
-
-	res = strings.Split(string(buf), "\r\n")
-	decrypted, _ := utils.Decrypt(sessionKey, []byte(res[0]))
-
-	if string(decrypted) == "server done" {
-		fmt.Println("Succesful received server done message")
-		// everything is ok and return session key
-		return sessionKey
-	}
-	return []byte("wtf")
 }
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
@@ -256,6 +203,9 @@ func main() {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	utils.CheckError(err)
 	sessionKey, conn := utils.ConnectToKeyServer("server")
+	fmt.Println("Good, i got some key:")
+	fmt.Println(string(sessionKey))
+	go listenKeyServer(sessionKey, conn)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {

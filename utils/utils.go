@@ -127,7 +127,6 @@ func ConnectToKeyServer(login string) ([]byte, net.Conn) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7701")
 	CheckError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	defer conn.Close()
 	CheckError(err)
 
 	//receive session key
