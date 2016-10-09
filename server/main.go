@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ddoubledi/data_security2/utils"
 )
@@ -27,6 +28,8 @@ func (u *User) String() string {
 }
 
 var userList = list.New()
+var userMap = map[string]string{}
+var lock = sync.RWMutex{}
 
 func getUsersFromFile(filename string) {
 	dat, err := ioutil.ReadFile(filename)
@@ -187,15 +190,25 @@ func getCurrentMenu(currentMenu *string, choice string) string {
 
 func handleClient(conn net.Conn) {
 	login := utils.Read(conn)
-	fmt.Println("Login:", login)
+	fmt.Println("Login:", string(login))
+	lock.RLock()
+	sessionKey := userMap[string(login)]
+	fmt.Println(sessionKey)
+	lock.RUnlock()
 }
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
-
+	for {
+		message := utils.ReadSecure(conn, serverSessionKey)
+		res := strings.Split(string(message), "\r\n")
+		lock.Lock()
+		fmt.Println("new message: ", res[0], res[1])
+		userMap[string(res[0])] = string(res[1])
+		lock.Unlock()
+	}
 }
 
 func main() {
-	// map, that store map[login] = sessionKey
 	getUsersFromFile("./user_db.txt")
 	service := ":7700"
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)

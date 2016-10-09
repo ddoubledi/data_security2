@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"net"
 
 	"github.com/ddoubledi/data_security2/utils"
 
@@ -23,12 +24,12 @@ func main() {
 
 func workWithMainServer(sessionKey []byte, login string) {
 	fmt.Println("Start speak with server")
-	// tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7700")
-	// utils.CheckError(err)
-	// conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	// // defer conn.Close()
-	// utils.CheckError(err)
-	// conn.Write([]byte(login))
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:7700")
+	utils.CheckError(err)
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	defer conn.Close()
+	utils.CheckError(err)
+	conn.Write([]byte(login))
 	// response := make([]byte, 128)
 	// for {
 	// 	readLen, err := conn.Read(response)

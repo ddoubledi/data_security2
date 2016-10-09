@@ -18,6 +18,7 @@ func main() {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	utils.CheckError(err)
 	connServer, serverKey := handleServer(listener)
+	fmt.Println("MainServer Done.")
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			go handleClient(conn, connServer, serverKey)
@@ -77,6 +78,7 @@ func genSecure(conn net.Conn) (string, []byte) {
 				utils.WriteSecure([]byte(genString), conn, sessionKey)
 				fmt.Println("serverSessionKey:", genString)
 				// TODO: Client done?
+				return login, []byte(genString)
 			}
 		}
 		buf = make([]byte, 256)
@@ -90,7 +92,6 @@ func handleServer(listener *net.TCPListener) (net.Conn, []byte) {
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			_, key := genSecure(conn)
-			// send to server about new client
 			return conn, key
 		}
 	}
