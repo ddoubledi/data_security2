@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/ddoubledi/data_security2/utils"
 
@@ -29,7 +30,21 @@ func workWithMainServer(sessionKey []byte, login string) {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	defer conn.Close()
 	utils.CheckError(err)
-	conn.Write([]byte(login))
+	// conn.Write([]byte(login))
+	utils.Write([]byte(login), conn)
+	buf := utils.Read(conn)
+	res := strings.Split(string(buf), "\r\n")
+
+	if string(res[0]) == "good" {
+		fmt.Println("Nice")
+		fmt.Println("My sessionKey:", string(sessionKey))
+	}
+	// utils.WriteSecureSave([]byte("hi server"), conn, sessionKey)
+	// buf := utils.ReadSecure(conn, sessionKey)
+	// if string(buf) == "hi "+login {
+	// 	fmt.Println("Heeey")
+	// 	utils.WriteSecure([]byte("hi server"), conn, sessionKey)
+	// }
 	// response := make([]byte, 128)
 	// for {
 	// 	readLen, err := conn.Read(response)

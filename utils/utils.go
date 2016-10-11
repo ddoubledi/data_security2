@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -30,6 +31,17 @@ func GenerateAESKey(largeKey []byte) []byte {
 	return key
 }
 
+// AddEnd ga
+func AddEnd(message []byte) []byte {
+	message = AddDelimiter(message)
+	return append(message, []byte("end")...)
+}
+
+// AddDelimiter na
+func AddDelimiter(message []byte) []byte {
+	return append(message, []byte(DELIMITER)...)
+}
+
 // Write ga
 func Write(message []byte, conn net.Conn) {
 	conn.Write(AddEnd(message))
@@ -42,6 +54,35 @@ func WriteSecure(message []byte, conn net.Conn, key []byte) {
 	Write(encMessage, conn)
 }
 
+func WriteSecureSave(message []byte, conn net.Conn, key []byte) {
+	hash := md5.Sum(message)
+	//add to message special delimiter for hash
+	hashDelimiter := "\rhash:\n"
+	message = append(append(message, []byte(hashDelimiter)...), hash[:]...)
+	encMessage, err := Encrypt(key, message)
+	CheckError(err)
+	Write(encMessage, conn)
+	buf := ReadSecure(conn, key)
+	res := strings.Split(string(buf), "\r\n")
+	if string(res[0]) != "OK" {
+		panic("NOT OK")
+	}
+}
+
+func ReadSecureSave(conn net.Conn, key []byte) []byte {
+	message := Read(conn)
+	res := strings.Split(string(message), "\r\n")
+	encMessage, err := Decrypt(key, []byte(res[0]))
+	CheckError(err)
+	resHash := strings.Split(string(encMessage), "\rhash:\n")
+	hash := md5.Sum([]byte(resHash[0]))
+	if string(resHash[1]) == string(hash[:]) {
+		WriteSecure([]byte("OK"), conn, key)
+		return []byte(resHash[0])
+	}
+	return []byte("wtf")
+}
+
 // ReadSecure encrypted message must be on the first position of split - [encMessage\r\nend]
 // Than we can split it as usual string.
 func ReadSecure(conn net.Conn, key []byte) []byte {
@@ -52,35 +93,26 @@ func ReadSecure(conn net.Conn, key []byte) []byte {
 	return encMessage
 }
 
-// AddEnd ga
-func AddEnd(message []byte) []byte {
-	message = AddDelimiter(message)
-	return append(message, []byte("end")...)
-}
-
-// AddDelimiter na
-func AddDelimiter(message []byte) []byte {
-	return append(message, []byte(DELIMITER)...)
-}
-
 // Read na
 func Read(conn net.Conn) []byte {
 	buf := make([]byte, 0, 4096) // big buffer
 	tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
+For:
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
 			if err != io.EOF {
 				fmt.Println("read error:", err)
 			}
-			break
+			break For
 		}
 		buf = append(buf, tmp[:n]...)
 		tmp = make([]byte, 256)
 		end := buf[len(buf)-5:]
 		if string(end) == "\r\nend" {
-			break
+			break For
 		}
+
 	}
 	return buf
 }

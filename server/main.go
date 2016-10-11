@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"container/list"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,154 +44,24 @@ func getUsersFromFile(filename string) {
 	}
 }
 
-func pushUsersToFile(filename string) {
-	var buffer bytes.Buffer
-	for e := userList.Front(); e != nil; e = e.Next() {
-		userElement := e.Value.(*User)
-		buffer.Write([]byte(userElement.String()))
-	}
-	err := ioutil.WriteFile(filename, []byte(buffer.String()), 0644)
-	utils.CheckError(err)
-}
-
-func checkUser(login string, password string) *User {
-	for e := userList.Front(); e != nil; e = e.Next() {
-		userElement := e.Value.(*User)
-		if (login == userElement.name) && (password == userElement.password) {
-			return userElement
-		}
-	}
-	return nil
-}
-
-func userExist(login string) bool {
-	returnVal := false
-	for e := userList.Front(); e != nil; e = e.Next() {
-		userElement := e.Value.(*User)
-		fmt.Println("login", login)
-		fmt.Println("name", userElement.name)
-		if login == userElement.name {
-			returnVal = true
-			break
-		}
-	}
-	return returnVal
-}
-
-func login() *User {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Enter login:")
-	scanner.Scan()
-	login := scanner.Text()
-	fmt.Println("Enter password:")
-	scanner.Scan()
-	password := scanner.Text()
-	user := checkUser(login, password)
-	return user
-}
-
-func loginChoices() *User {
-	scanner := bufio.NewScanner(os.Stdin)
-
-Choices:
-	for {
-		fmt.Println("Enter choice:")
-		scanner.Scan()
-		choice := scanner.Text()
-
-		switch choice {
-		case "l":
-			user := login()
-			if user != nil {
-				return user
-			} else {
-				continue Choices
-			}
-		case "q":
-			fmt.Println("quit")
-			os.Exit(1)
-		default:
-			continue Choices
-		}
-	}
-}
-
-func register() {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Enter login:")
-	scanner.Scan()
-	login := scanner.Text()
-	fmt.Println("Enter password:")
-	scanner.Scan()
-	password := scanner.Text()
-	fmt.Println("Enter role:")
-	scanner.Scan()
-	role, err := strconv.ParseBool(scanner.Text())
-	utils.CheckError(err)
-	user := User{login, password, role, false}
-	userList.PushBack(&user)
-}
-
-func preMain() {
-	userList.PushBack(&User{"admin", "admin", true, false})
-	getUsersFromFile("./user_db.txt")
-	pushUsersToFile("./user_dump.txt")
-	scanner := bufio.NewScanner(os.Stdin)
-	var user *User
-	user = loginChoices()
-
-	for {
-		fmt.Println("Hi " + user.name)
-		fmt.Println("Enter choice:")
-		scanner.Scan()
-		choice := scanner.Text()
-		if user.role {
-			if choice == "r" {
-				register()
-			}
-		}
-	}
-}
-
-func getCurrentMenu(currentMenu *string, choice string) string {
-	var returnVal string
-	menuValue := *currentMenu
-	switch menuValue {
-	case "hello":
-		{
-			*currentMenu = "login"
-			returnVal = "Enter your login:"
-			break
-		}
-	case "login":
-		{
-			if userExist(choice) {
-				*currentMenu = "password"
-				returnVal = "Enter your password:"
-			} else {
-				*currentMenu = "hello"
-				returnVal = "Incorect login"
-			}
-			break
-		}
-	case "password":
-		{
-
-		}
-	default:
-		returnVal = "Invalid choice"
-	}
-	return returnVal
-	// return ""
-}
-
 func handleClient(conn net.Conn) {
-	login := utils.Read(conn)
+	res := utils.Read(conn)
+	login := strings.Split(string(res), "\r\n")[0]
+	// TODO: send good message with hash of info
+	utils.Write([]byte("good"), conn)
 	fmt.Println("Login:", string(login))
-	lock.RLock()
-	sessionKey := userMap[string(login)]
-	fmt.Println(sessionKey)
-	lock.RUnlock()
+	lock.Lock()
+	sessionKey := []byte(userMap[string(login)])
+	lock.Unlock()
+	fmt.Println(string(sessionKey))
+	// res := utils.ReadSecureSave(conn, sessionKey)
+	// fmt.Println(string(res))
+	// handshake
+	// utils.WriteSecure([]byte("hi "+string(login)), conn, key)
+	// buf := utils.ReadSecure(conn, key)
+	// if string(buf) == "hi server" {
+	// 	fmt.Println("Hey")
+	// }
 }
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
