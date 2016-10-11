@@ -45,8 +45,8 @@ func getUsersFromFile(filename string) {
 }
 
 func handleClient(conn net.Conn) {
-	res := utils.Read(conn)
-	login := strings.Split(string(res), "\r\n")[0]
+	buf := utils.Read(conn)
+	login := strings.Split(string(buf), "\r\n")[0]
 	// TODO: send good message with hash of info
 	utils.Write([]byte("good"), conn)
 	fmt.Println("Login:", string(login))
@@ -54,14 +54,21 @@ func handleClient(conn net.Conn) {
 	sessionKey := []byte(userMap[string(login)])
 	lock.Unlock()
 	fmt.Println(string(sessionKey))
-	// res := utils.ReadSecureSave(conn, sessionKey)
-	// fmt.Println(string(res))
-	// handshake
-	// utils.WriteSecure([]byte("hi "+string(login)), conn, key)
-	// buf := utils.ReadSecure(conn, key)
-	// if string(buf) == "hi server" {
-	// 	fmt.Println("Hey")
-	// }
+	buf = utils.ReadSecure(conn, sessionKey)
+	res := strings.Split(string(buf), "\r\n")
+	if string(res[0]) == "hi server" {
+		utils.WriteSecure([]byte("hi "+login), conn, sessionKey)
+		fmt.Println("good handshake")
+		currentMenu := "hello"
+		utils.WriteSecure([]byte(getCurrentMenu(&currentMenu, "")), conn, sessionKey)
+		for {
+			// get choice from user and than send currentMenu
+			buf = utils.ReadSecure(conn, sessionKey)
+			res = strings.Split(string(buf), "\r\n")
+			choice := res[0]
+			utils.WriteSecure([]byte(getCurrentMenu(&currentMenu, choice)), conn, sessionKey)
+		}
+	}
 }
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {

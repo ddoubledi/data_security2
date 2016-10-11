@@ -116,12 +116,6 @@ func getCurrentMenu(currentMenu *string, choice string) string {
 	switch menuValue {
 	case "hello":
 		{
-			*currentMenu = "login"
-			returnVal = "Enter your login:"
-			break
-		}
-	case "login":
-		{
 			if userExist(choice) {
 				*currentMenu = "password"
 				returnVal = "Enter your password:"

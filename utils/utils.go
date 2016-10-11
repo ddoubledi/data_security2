@@ -3,7 +3,6 @@ package utils
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -52,35 +51,6 @@ func WriteSecure(message []byte, conn net.Conn, key []byte) {
 	encMessage, err := Encrypt(key, message)
 	CheckError(err)
 	Write(encMessage, conn)
-}
-
-func WriteSecureSave(message []byte, conn net.Conn, key []byte) {
-	hash := md5.Sum(message)
-	//add to message special delimiter for hash
-	hashDelimiter := "\rhash:\n"
-	message = append(append(message, []byte(hashDelimiter)...), hash[:]...)
-	encMessage, err := Encrypt(key, message)
-	CheckError(err)
-	Write(encMessage, conn)
-	buf := ReadSecure(conn, key)
-	res := strings.Split(string(buf), "\r\n")
-	if string(res[0]) != "OK" {
-		panic("NOT OK")
-	}
-}
-
-func ReadSecureSave(conn net.Conn, key []byte) []byte {
-	message := Read(conn)
-	res := strings.Split(string(message), "\r\n")
-	encMessage, err := Decrypt(key, []byte(res[0]))
-	CheckError(err)
-	resHash := strings.Split(string(encMessage), "\rhash:\n")
-	hash := md5.Sum([]byte(resHash[0]))
-	if string(resHash[1]) == string(hash[:]) {
-		WriteSecure([]byte("OK"), conn, key)
-		return []byte(resHash[0])
-	}
-	return []byte("wtf")
 }
 
 // ReadSecure encrypted message must be on the first position of split - [encMessage\r\nend]
