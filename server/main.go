@@ -3,7 +3,6 @@ package main
 import (
 	"container/list"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
@@ -28,25 +27,15 @@ var userList = list.New()
 var userMap = map[string]string{}
 var lock = sync.RWMutex{}
 
-func getUsersFromFile(filename string) {
-	dat, err := ioutil.ReadFile(filename)
-	utils.CheckError(err)
-	userPass := strings.Split(string(dat), "\n")
-	for i := 0; i < len(userPass)-1; i++ {
-		splitedUserPass := strings.Split(userPass[i], ";")
-		fmt.Println(splitedUserPass)
-		role, err := strconv.ParseBool(splitedUserPass[2])
-		utils.CheckError(err)
-		blocked, err := strconv.ParseBool(splitedUserPass[3])
-		utils.CheckError(err)
-		newUser := User{splitedUserPass[0], splitedUserPass[1], role, blocked}
-		userList.PushBack(&newUser)
-	}
-}
-
 func handleClient(conn net.Conn) {
 	buf := utils.Read(conn)
 	login := strings.Split(string(buf), "\r\n")[0]
+
+	// check if user exist
+	if !userExist(login) {
+		conn.Close()
+	}
+
 	// TODO: send good message with hash of info
 	utils.Write([]byte("good"), conn)
 	fmt.Println("Login:", string(login))
@@ -57,16 +46,38 @@ func handleClient(conn net.Conn) {
 	buf = utils.ReadSecure(conn, sessionKey)
 	res := strings.Split(string(buf), "\r\n")
 	if string(res[0]) == "hi server" {
+		user := new(User)
 		utils.WriteSecure([]byte("hi "+login), conn, sessionKey)
 		fmt.Println("good handshake")
-		currentMenu := "hello"
-		utils.WriteSecure([]byte(getCurrentMenu(&currentMenu, "")), conn, sessionKey)
+		currentMenu := "password"
+		utils.WriteSecure([]byte("Enter your password:"), conn, sessionKey)
 		for {
 			// get choice from user and than send currentMenu
 			buf = utils.ReadSecure(conn, sessionKey)
 			res = strings.Split(string(buf), "\r\n")
 			choice := res[0]
-			utils.WriteSecure([]byte(getCurrentMenu(&currentMenu, choice)), conn, sessionKey)
+			switch currentMenu {
+			case "password":
+				{
+					if passwordChacker(user, conn, sessionKey, login, choice) {
+						// fmt.Println("yeah password")
+						if user.role {
+							currentMenu = "mainMenu"
+							utils.WriteSecure([]byte("c-change password\ng-get file\nq-exit"), conn, sessionKey)
+						} else {
+							currentMenu = "adminMenu"
+						}
+					} else {
+						conn.Close()
+					}
+				}
+			case "mainMenu":
+				{
+
+				}
+			default:
+				utils.WriteSecure([]byte("Invalid choice"), conn, sessionKey)
+			}
 		}
 	}
 }

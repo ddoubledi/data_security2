@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/ddoubledi/data_security2/utils"
 )
@@ -35,44 +37,6 @@ func userExist(login string) bool {
 	return returnVal
 }
 
-func login() *User {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Enter login:")
-	scanner.Scan()
-	login := scanner.Text()
-	fmt.Println("Enter password:")
-	scanner.Scan()
-	password := scanner.Text()
-	user := checkUser(login, password)
-	return user
-}
-
-func loginChoices() *User {
-	scanner := bufio.NewScanner(os.Stdin)
-
-Choices:
-	for {
-		fmt.Println("Enter choice:")
-		scanner.Scan()
-		choice := scanner.Text()
-
-		switch choice {
-		case "l":
-			user := login()
-			if user != nil {
-				return user
-			} else {
-				continue Choices
-			}
-		case "q":
-			fmt.Println("quit")
-			os.Exit(1)
-		default:
-			continue Choices
-		}
-	}
-}
-
 func register() {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("Enter login:")
@@ -89,51 +53,23 @@ func register() {
 	userList.PushBack(&user)
 }
 
-func preMain() {
-	userList.PushBack(&User{"admin", "admin", true, false})
-	getUsersFromFile("./user_db.txt")
-	pushUsersToFile("./user_dump.txt")
-	scanner := bufio.NewScanner(os.Stdin)
-	var user *User
-	user = loginChoices()
-
-	for {
-		fmt.Println("Hi " + user.name)
-		fmt.Println("Enter choice:")
-		scanner.Scan()
-		choice := scanner.Text()
-		if user.role {
-			if choice == "r" {
-				register()
-			}
+func passwordChacker(user *User, conn net.Conn, key []byte, login string, password string) bool {
+	var err bool
+	for attempts := 0; attempts < 3; attempts++ {
+		if attempts != 0 {
+			password = string(utils.ReadSecure(conn, key))
 		}
-	}
-}
-
-func getCurrentMenu(currentMenu *string, choice string) string {
-	var returnVal string
-	menuValue := *currentMenu
-	switch menuValue {
-	case "hello":
-		{
-			if userExist(choice) {
-				*currentMenu = "password"
-				returnVal = "Enter your password:"
-			} else {
-				*currentMenu = "hello"
-				returnVal = "Incorect login"
-			}
+		user = checkUser(login, password)
+		if user != nil {
+			err = true
 			break
 		}
-	case "password":
-		{
-
+		if attempts == 2 {
+			conn.Close()
 		}
-	default:
-		returnVal = "Invalid choice"
+		utils.WriteSecure([]byte("Wrong password. Remain attempts - "+string((3-attempts))), conn, key)
 	}
-	return returnVal
-	// return ""
+	return err
 }
 
 func pushUsersToFile(filename string) {
@@ -144,4 +80,20 @@ func pushUsersToFile(filename string) {
 	}
 	err := ioutil.WriteFile(filename, []byte(buffer.String()), 0644)
 	utils.CheckError(err)
+}
+
+func getUsersFromFile(filename string) {
+	dat, err := ioutil.ReadFile(filename)
+	utils.CheckError(err)
+	userPass := strings.Split(string(dat), "\n")
+	for i := 0; i < len(userPass)-1; i++ {
+		splitedUserPass := strings.Split(userPass[i], ";")
+		fmt.Println(splitedUserPass)
+		role, err := strconv.ParseBool(splitedUserPass[2])
+		utils.CheckError(err)
+		blocked, err := strconv.ParseBool(splitedUserPass[3])
+		utils.CheckError(err)
+		newUser := User{splitedUserPass[0], splitedUserPass[1], role, blocked}
+		userList.PushBack(&newUser)
+	}
 }
