@@ -50,7 +50,7 @@ func login() *User {
 func loginChoices() *User {
 	scanner := bufio.NewScanner(os.Stdin)
 
-Choices:
+	Choices:
 	for {
 		fmt.Println("Enter choice:")
 		scanner.Scan()

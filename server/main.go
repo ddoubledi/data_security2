@@ -32,7 +32,7 @@ func getUsersFromFile(filename string) {
 	dat, err := ioutil.ReadFile(filename)
 	utils.CheckError(err)
 	userPass := strings.Split(string(dat), "\n")
-	for i := 0; i < len(userPass)-1; i++ {
+	for i := 0; i < len(userPass) - 1; i++ {
 		splitedUserPass := strings.Split(userPass[i], ";")
 		fmt.Println(splitedUserPass)
 		role, err := strconv.ParseBool(splitedUserPass[2])
@@ -54,15 +54,36 @@ func handleClient(conn net.Conn) {
 	sessionKey := []byte(userMap[string(login)])
 	lock.Unlock()
 	fmt.Println(string(sessionKey))
-	// res := utils.ReadSecureSave(conn, sessionKey)
-	// fmt.Println(string(res))
-	// handshake
-	// utils.WriteSecure([]byte("hi "+string(login)), conn, key)
-	// buf := utils.ReadSecure(conn, key)
-	// if string(buf) == "hi server" {
-	// 	fmt.Println("Hey")
-	// }
+	var user User
+	for attempts := 0; attempts < 3; attempts++ {
+		utils.WriteSecureSave([]byte("Enter password:"), conn, sessionKey)
+		fmt.Println("Enter password:")
+		password := utils.ReadSecureSave(conn, sessionKey)
+		user = checkUser(login, password)
+		if user != nil {
+			break
+		}
+		if attempts == 2 {
+			conn.Close()
+			return
+		}
+		utils.WriteSecureSave([]byte("Wrong password. Remain attempts - " + (3 - attempts)), conn, sessionKey)
+	}
+
+	// TODO: here is must be: getCurrentMenu() and then
+	user = loginChoices()
+
+	for {
+		utils.WriteSecureSave([]byte("Hi " + user.name + "\nEnter choice:"), conn, sessionKey)
+		choice := utils.ReadSecureSave(conn, sessionKey)
+		if user.role {
+			if choice == "r" {
+				register()
+			}
+		}
+	}
 }
+
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
 	for {
