@@ -62,10 +62,11 @@ func handleClient(conn net.Conn) {
 					if passwordChacker(user, conn, sessionKey, login, choice) {
 						// fmt.Println("yeah password")
 						if user.role {
-							currentMenu = "mainMenu"
-							utils.WriteSecure([]byte("c-change password\ng-get file\nq-exit"), conn, sessionKey)
-						} else {
 							currentMenu = "adminMenu"
+							utils.WriteSecure([]byte("Hi admin:c-change password\ng-get file\nq-exit"), conn, sessionKey)
+						} else {
+							currentMenu = "mainMenu"
+							utils.WriteSecure([]byte("Hi user:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 						}
 					} else {
 						conn.Close()
@@ -74,6 +75,19 @@ func handleClient(conn net.Conn) {
 			case "mainMenu":
 				{
 
+				}
+			case "adminMenu":
+				{
+					switch choice {
+					case "c":
+						currentMenu = "aChangePassword"
+						utils.WriteSecure([]byte("Enter password:"), conn, sessionKey)
+					}
+				}
+			case "aChangePassword":
+				{
+					currentMenu = "adminMenu"
+					changePassword(user, conn, sessionKey, choice)
 				}
 			default:
 				utils.WriteSecure([]byte("Invalid choice"), conn, sessionKey)

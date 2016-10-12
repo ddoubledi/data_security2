@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 
@@ -37,20 +35,22 @@ func userExist(login string) bool {
 	return returnVal
 }
 
-func register() {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Enter login:")
-	scanner.Scan()
-	login := scanner.Text()
-	fmt.Println("Enter password:")
-	scanner.Scan()
-	password := scanner.Text()
-	fmt.Println("Enter role:")
-	scanner.Scan()
-	role, err := strconv.ParseBool(scanner.Text())
-	utils.CheckError(err)
+func register(login string, password string) {
+	role := false
 	user := User{login, password, role, false}
 	userList.PushBack(&user)
+}
+
+func blockUser(login string) bool {
+	for e := userList.Front(); e != nil; e = e.Next() {
+		userElement := e.Value.(*User)
+		if login == userElement.name {
+			userElement.blocked = true
+			return true
+		}
+	}
+	return false
+
 }
 
 func passwordChacker(user *User, conn net.Conn, key []byte, login string, password string) bool {
@@ -70,6 +70,24 @@ func passwordChacker(user *User, conn net.Conn, key []byte, login string, passwo
 		utils.WriteSecure([]byte("Wrong password. Remain attempts - "+string((3-attempts))), conn, key)
 	}
 	return err
+}
+
+func changePassword(user *User, conn net.Conn, key []byte, password string) bool {
+	for attempts := 0; attempts < 3; attempts++ {
+		var repassword string
+		if attempts != 0 {
+			password = string(utils.ReadSecure(conn, key))
+		}
+		utils.WriteSecure([]byte("Enter password again"), conn, key)
+		repassword = string(utils.ReadSecure(conn, key))
+		if password == repassword {
+			user.password = password
+			return true
+		} else {
+			continue
+		}
+	}
+	return false
 }
 
 func pushUsersToFile(filename string) {
