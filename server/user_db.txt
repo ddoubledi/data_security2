@@ -1,3 +1,4 @@
 admin;admin;true;false
-pidr;lol;false;false
-user;suka;false;false
+lol;lol;false;false
+user;user;false;false
+AnyaSuper;unicorn;true;false

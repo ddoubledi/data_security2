@@ -60,10 +60,8 @@ func handleClient(conn net.Conn) {
 			case "password":
 				{
 					if passwordChacker(user, conn, sessionKey, login, choice) {
-						// fmt.Println("yeah password")
 						if user.role {
 							currentMenu = "adminMenu"
-							utils.WriteSecure([]byte("Hi admin:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 						} else {
 							currentMenu = "mainMenu"
 							utils.WriteSecure([]byte("Hi user:c-change password\ng-get file\nq-exit"), conn, sessionKey)
@@ -75,6 +73,7 @@ func handleClient(conn net.Conn) {
 			case "mainMenu":
 				{
 
+					utils.WriteSecure([]byte("Hi admin:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 				}
 			case "adminMenu":
 				{
