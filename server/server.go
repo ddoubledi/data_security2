@@ -57,7 +57,9 @@ func passwordChacker(user *User, conn net.Conn, key []byte, login string, passwo
 	var err bool
 	for attempts := 0; attempts < 3; attempts++ {
 		if attempts != 0 {
-			password = string(utils.ReadSecure(conn, key))
+			buf, err := utils.ReadSecure(conn, key)
+			utils.CheckError(err)
+			password = string(buf)
 		}
 		user = checkUser(login, password)
 		if user != nil {
@@ -76,10 +78,14 @@ func changePassword(user *User, conn net.Conn, key []byte, password string) bool
 	for attempts := 0; attempts < 3; attempts++ {
 		var repassword string
 		if attempts != 0 {
-			password = string(utils.ReadSecure(conn, key))
+			buf, err := utils.ReadSecure(conn, key)
+			utils.CheckError(err)
+			password = string(buf)
 		}
 		utils.WriteSecure([]byte("Enter password again"), conn, key)
-		repassword = string(utils.ReadSecure(conn, key))
+		buf, err := utils.ReadSecure(conn, key)
+		utils.CheckError(err)
+		repassword = string(buf)
 		if password == repassword {
 			user.password = password
 			return true

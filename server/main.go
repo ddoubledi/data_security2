@@ -3,6 +3,7 @@ package main
 import (
 	"container/list"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func handleClient(conn net.Conn) {
 	sessionKey := []byte(userMap[string(login)])
 	lock.Unlock()
 	fmt.Println(string(sessionKey))
-	buf = utils.ReadSecure(conn, sessionKey)
+	buf, _ = utils.ReadSecure(conn, sessionKey)
 	res := strings.Split(string(buf), "\r\n")
 	if string(res[0]) == "hi server" {
 		user := new(User)
@@ -53,7 +54,10 @@ func handleClient(conn net.Conn) {
 		utils.WriteSecure([]byte("Enter your password:"), conn, sessionKey)
 		for {
 			// get choice from user and than send currentMenu
-			buf = utils.ReadSecure(conn, sessionKey)
+			buf, err := utils.ReadSecure(conn, sessionKey)
+			if err != nil {
+				return
+			}
 			res = strings.Split(string(buf), "\r\n")
 			choice := res[0]
 			switch currentMenu {
@@ -61,10 +65,11 @@ func handleClient(conn net.Conn) {
 				{
 					if passwordChacker(user, conn, sessionKey, login, choice) {
 						if user.role {
-							currentMenu = "adminMenu"
-						} else {
 							currentMenu = "mainMenu"
 							utils.WriteSecure([]byte("Hi user:c-change password\ng-get file\nq-exit"), conn, sessionKey)
+						} else {
+							currentMenu = "adminMenu"
+							utils.WriteSecure([]byte("Hi admin:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 						}
 					} else {
 						conn.Close()
@@ -72,8 +77,22 @@ func handleClient(conn net.Conn) {
 				}
 			case "mainMenu":
 				{
-
-					utils.WriteSecure([]byte("Hi admin:c-change password\ng-get file\nq-exit"), conn, sessionKey)
+					switch choice {
+					case "c":
+						currentMenu = "aChangePassword"
+						utils.WriteSecure([]byte("Enter password:"), conn, sessionKey)
+					case "q":
+						currentMenu = "Exit"
+						send := append(utils.AddDelimiter([]byte("Buy")), []byte("q")...)
+						utils.WriteSecure(send, conn, sessionKey)
+					case "g":
+						currentMenu = "GetFile"
+						send := append(utils.AddDelimiter([]byte("Get file")), []byte("g")...)
+						dat, err := ioutil.ReadFile("./file")
+						utils.CheckError(err)
+						send = append(utils.AddDelimiter(send), []byte(dat)...)
+						utils.WriteSecure(send, conn, sessionKey)
+					}
 				}
 			case "adminMenu":
 				{
@@ -81,12 +100,31 @@ func handleClient(conn net.Conn) {
 					case "c":
 						currentMenu = "aChangePassword"
 						utils.WriteSecure([]byte("Enter password:"), conn, sessionKey)
+					case "q":
+						currentMenu = "Exit"
+						send := append(utils.AddDelimiter([]byte("Buy")), []byte("q")...)
+						utils.WriteSecure(send, conn, sessionKey)
+						conn.Close()
+						return
+					case "g":
+						currentMenu = "GetFile"
+						send := append(utils.AddDelimiter([]byte("Get file")), []byte("g")...)
+						dat, err := ioutil.ReadFile("./file")
+						utils.CheckError(err)
+						send = append(utils.AddDelimiter(send), []byte(dat)...)
+						utils.WriteSecure(send, conn, sessionKey)
 					}
+				}
+			case "GetFile":
+				{
+					currentMenu = "adminMenu"
+					utils.WriteSecure([]byte("Hi user:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 				}
 			case "aChangePassword":
 				{
 					currentMenu = "adminMenu"
 					changePassword(user, conn, sessionKey, choice)
+					utils.WriteSecure([]byte("Hi user:c-change password\ng-get file\nq-exit"), conn, sessionKey)
 				}
 			default:
 				utils.WriteSecure([]byte("Invalid choice"), conn, sessionKey)
@@ -97,7 +135,7 @@ func handleClient(conn net.Conn) {
 
 func listenKeyServer(serverSessionKey []byte, conn net.Conn) {
 	for {
-		message := utils.ReadSecure(conn, serverSessionKey)
+		message, _ := utils.ReadSecure(conn, serverSessionKey)
 		res := strings.Split(string(message), "\r\n")
 		lock.Lock()
 		fmt.Println("new message: ", res[0], res[1])

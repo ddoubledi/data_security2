@@ -55,12 +55,11 @@ func WriteSecure(message []byte, conn net.Conn, key []byte) {
 
 // ReadSecure encrypted message must be on the first position of split - [encMessage\r\nend]
 // Than we can split it as usual string.
-func ReadSecure(conn net.Conn, key []byte) []byte {
+func ReadSecure(conn net.Conn, key []byte) ([]byte, error) {
 	message := Read(conn)
 	res := strings.Split(string(message), "\r\n")
 	encMessage, err := Decrypt(key, []byte(res[0]))
-	CheckError(err)
-	return encMessage
+	return encMessage, err
 }
 
 // Read na
@@ -161,9 +160,9 @@ func ConnectToKeyServer(login string) ([]byte, net.Conn) {
 
 	Write(append(AddDelimiter(cipheredDone), publicKey...), conn)
 
-	result := ReadSecure(conn, sessionKey)
+	result, _ := ReadSecure(conn, sessionKey)
 	if string(result) == "server good" {
-		result := ReadSecure(conn, sessionKey)
+		result, _ := ReadSecure(conn, sessionKey)
 		serverSessionKey = []byte(result)
 		WriteSecure([]byte("client done"), conn, sessionKey)
 		return serverSessionKey, conn

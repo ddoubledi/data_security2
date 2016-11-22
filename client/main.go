@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"strings"
 
@@ -40,15 +41,28 @@ func workWithMainServer(sessionKey []byte, login string) {
 	}
 
 	utils.WriteSecure([]byte("hi server"), conn, sessionKey)
-	buf = utils.ReadSecure(conn, sessionKey)
+	buf, _ = utils.ReadSecure(conn, sessionKey)
 	res = strings.Split(string(buf), "\r\n")
 
 	if string(res[0]) == "hi "+login {
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
-			buf := utils.ReadSecure(conn, sessionKey)
+			buf, _ := utils.ReadSecure(conn, sessionKey)
 			res := strings.Split(string(buf), "\r\n")
+			fmt.Println("buff:", res)
 			fmt.Println(string(res[0]))
+			if len(res) > 1 {
+				fmt.Println("func:", res[1])
+				switch res[1] {
+				case "q":
+					fmt.Print("Buy")
+					return
+				case "g":
+					file := []byte(res[2])
+					err := ioutil.WriteFile("./file", file, 0644)
+					utils.CheckError(err)
+				}
+			}
 			scanner.Scan()
 			choice := scanner.Text()
 			utils.WriteSecure([]byte(choice), conn, sessionKey)
