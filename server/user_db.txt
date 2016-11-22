@@ -1,4 +1,4 @@
 admin;admin;true;false
 lol;lol;false;false
-user;user;false;false
+user;aak;false;false
 AnyaSuper;unicorn;true;false

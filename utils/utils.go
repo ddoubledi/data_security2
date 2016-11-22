@@ -155,8 +155,8 @@ func ConnectToKeyServer(login string) ([]byte, net.Conn) {
 
 	doneMessage := []byte("client good")
 
-	cipheredDone, err := Encrypt(sessionKey, doneMessage)
-	CheckError(err)
+	cipheredDone, _ := Encrypt(sessionKey, doneMessage)
+	// CheckError(err)
 
 	Write(append(AddDelimiter(cipheredDone), publicKey...), conn)
 
