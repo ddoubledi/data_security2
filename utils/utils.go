@@ -43,7 +43,14 @@ func AddDelimiter(message []byte) []byte {
 
 // Write ga
 func Write(message []byte, conn net.Conn) {
-	conn.Write(AddEnd(message))
+	// set minimal message len(for better sync) to 256
+	message = AddEnd(message)
+	message_len := len(message)
+	if message_len < 256 {
+		tmp := make([]byte, 0, 256)
+		message = append(tmp, message[:message_len]...)
+	}
+	conn.Write(message)
 }
 
 // WriteSecure encrypt message and send it.
@@ -65,7 +72,7 @@ func ReadSecure(conn net.Conn, key []byte) ([]byte, error) {
 // Read na
 func Read(conn net.Conn) []byte {
 	buf := make([]byte, 0, 4096) // big buffer
-	tmp := make([]byte, 256)     // using small tmo buffer for demonstrating
+	tmp := make([]byte, 256)     // using small buffer
 For:
 	for {
 		n, err := conn.Read(tmp)

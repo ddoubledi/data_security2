@@ -19,9 +19,21 @@ func main() {
 	utils.CheckError(err)
 	connServer, serverKey := handleServer(listener)
 	fmt.Println("MainServer Done.")
+	connection_per_m := 0
+	max_connections := 100
+	go func() {
+		for {
+			connection_per_m = 0
+			time.Sleep(time.Second * 60)
+		}
+	}()
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			go handleClient(conn, connServer, serverKey)
+			connection_per_m += 1
+		}
+		if connection_per_m > max_connections {
+			return
 		}
 	}
 
